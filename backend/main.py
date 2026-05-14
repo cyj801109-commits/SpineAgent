@@ -1,9 +1,20 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
-import json, re
+import json, re, os, tempfile
+from pathlib import Path
+
+# Railway 환경에서 GCP 서비스 계정 인증 처리
+_creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+if _creds_json and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+    _tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False)
+    _tmp.write(_creds_json)
+    _tmp.close()
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _tmp.name
 
 vertexai.init(project="manual-auto-generator", location="asia-northeast3")
 
@@ -54,3 +65,15 @@ async def analyze(req: AnalyzeRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# --- 프론트엔드 정적 파일 서빙 ---
+static_dir = Path(__file__).resolve().parent / "static"
+if static_dir.is_dir():
+    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        file_path = static_dir / full_path
+        if file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(static_dir / "index.html")
