@@ -18,6 +18,4 @@ COPY backend/ ./
 # 프론트엔드 빌드 결과를 backend/static으로 복사
 COPY --from=frontend-build /app/frontend/dist ./static
 
-EXPOSE 8000
-
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}"]
