@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Pretendard', sans-serif;
+  background-color: #F4F5F7;
+  color: #333333;
+  overflow-x: hidden;
+}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #DDDDDD; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #888888; }
+
+.tab-btn { transition: all 0.2s ease-in-out; border: 1px solid transparent; border-bottom: none; }
+.tab-active { background-color: white; color: #333333; border-top: 3px solid #00BCD4; border-left: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; font-weight: bold; border-bottom: 1px solid white; margin-bottom: -1px; z-index: 10; position: relative; }
+.tab-inactive { background-color: #F9FAFB; color: #888888; font-weight: normal; border-bottom: 1px solid #E5E7EB; }
+.tab-inactive:hover { background-color: #F4F5F7; color: #333333; }
+.tab-conflict-active { background-color: white; color: #EF4444; border-top: 3px solid #EF4444; border-left: 1px solid #E5E7EB; border-right: 1px solid #E5E7EB; font-weight: bold; border-bottom: 1px solid white; margin-bottom: -1px; z-index: 10; position: relative; }
+
+.btn-scale { transition: transform 0.1s active; }
+.btn-scale:active { transform: scale(0.98); }
