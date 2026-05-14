@@ -16,7 +16,10 @@ if _creds_json and not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
     _tmp.close()
     os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = _tmp.name
 
-vertexai.init(project="manual-auto-generator", location="asia-northeast3")
+try:
+    vertexai.init(project="manual-auto-generator", location="asia-northeast3")
+except Exception as e:
+    print(f"[WARN] vertexai.init failed: {e}")
 
 app = FastAPI()
 app.add_middleware(
@@ -25,6 +28,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
 
 class AnalyzeRequest(BaseModel):
     model: str
