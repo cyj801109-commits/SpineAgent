@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPINE · 파이프라인 구조도 v1.0</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-height:100vh;padding:40px 24px;}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:0;}
+
+.page-header{margin-bottom:32px;}
+.page-label{font-size:11px;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;color:#9C9489;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;}
+.page-title{font-size:26px;font-weight:700;color:#1C1917;letter-spacing:-0.4px;margin-bottom:8px;}
+.meta-row{display:flex;gap:8px;flex-wrap:wrap;}
+.meta-pill{font-size:11px;font-family:'IBM Plex Mono',monospace;background:#F5F1EC;border:1px solid #E4E0DC;border-radius:4px;padding:3px 8px;color:#78716C;}
+
+.zone-label{font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:#9C9489;margin-bottom:8px;font-family:'IBM Plex Mono',monospace;}
+
+.input-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+.chip{display:flex;align-items:center;gap:6px;background:#FFFFFF;border:1px solid #E4E0DC;border-radius:6px;padding:8px 12px;font-size:12px;color:#57534E;}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dot-pdf{background:#D85A30;}
+.dot-xls{background:#639922;}
+.dot-txt{background:#378ADD;}
+.note{font-size:11px;font-family:'IBM Plex Mono',monospace;color:#9C9489;margin-bottom:4px;padding-left:2px;}
+
+.conn{display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:0;}
+.conn-line{width:1.5px;height:28px;background:#E4E0DC;}
+.conn-tip{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid #C8BFB8;}
+.conn-note{font-size:10px;font-family:'IBM Plex Mono',monospace;color:#9C9489;margin-top:4px;}
+
+.card{border:1px solid #E4E0DC;border-radius:12px;background:#FFFFFF;overflow:hidden;cursor:pointer;transition:border-color .18s,box-shadow .18s;}
+.card:hover{border-color:#C8BFB8;box-shadow:0 2px 12px rgba(0,0,0,0.06);}
+.card.open{border-color:#D4692A;box-shadow:0 0 0 1px rgba(212,105,42,0.12);}
+.card-head{display:flex;align-items:center;gap:10px;padding:16px 18px;}
+.step-pill{font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace;color:#993C1D;background:#FAECE7;border:1px solid #F5C4B3;border-radius:4px;padding:2px 8px;white-space:nowrap;}
+.card-title{font-size:14px;font-weight:600;color:#1C1917;flex:1;}
+.badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;letter-spacing:0.04em;}
+.badge-ai{background:#EEEDFE;color:#534AB7;border:1px solid #CECBF6;}
+.badge-hitl{background:#FAECE7;color:#993C1D;border:1px solid #F5C4B3;}
+.badge-out{background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;}
+.expand-icon{font-size:10px;color:#9C9489;font-family:'IBM Plex Mono',monospace;flex-shrink:0;transition:color .15s;}
+.card:hover .expand-icon{color:#78716C;}
+
+.card-body{display:none;padding:0 18px 18px;border-top:1px solid #F2EFEC;}
+.card.open .card-body{display:block;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+.cell{background:#FAFAF8;border-radius:8px;padding:12px 14px;}
+.cell-label{font-size:10px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#9C9489;margin-bottom:5px;font-family:'IBM Plex Mono',monospace;}
+.cell-val{font-size:12px;color:#57534E;line-height:1.65;}
+.mono{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#D4692A;line-height:1.7;}
+.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;}
+.tag{font-size:10px;font-family:'IBM Plex Mono',monospace;background:#FFFFFF;border:1px solid #E4E0DC;border-radius:3px;padding:2px 5px;color:#78716C;}
+.warn-tag{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-family:'IBM Plex Mono',monospace;background:#FAEEDA;border:1px solid #FAC775;border-radius:4px;padding:2px 7px;color:#854F0B;margin-top:6px;}
+
+.branch-row{display:flex;gap:8px;margin-top:10px;}
+.branch{flex:1;background:#FAFAF8;border-radius:8px;padding:11px 13px;}
+.branch-title{font-size:11px;font-weight:600;color:#1C1917;margin-bottom:4px;}
+.branch-sub{font-size:11px;color:#57534E;line-height:1.6;}
+
+.output-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+.out-chip{flex:1;min-width:180px;display:flex;align-items:center;gap:10px;background:#FFFFFF;border:1px solid #E4E0DC;border-radius:8px;padding:12px 14px;}
+.out-icon{width:30px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.out-label{font-size:12px;font-weight:600;color:#1C1917;}
+.out-sub{font-size:10px;color:#9C9489;margin-top:2px;font-family:'IBM Plex Mono',monospace;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-header">
+    <div class="page-label">SPINE · 파이프라인 구조도</div>
+    <div class="page-title">요구사항 분석 파이프라인</div>
+    <div class="meta-row">
+      <span class="meta-pill">v1.0</span>
+      <span class="meta-pill">3-Stage Agent Pipeline</span>
+      <span class="meta-pill">Gemini 2.5 Flash</span>
+      <span class="meta-pill">Vertex AI (asia-northeast3)</span>
+    </div>
+  </div>
+
+  <div class="zone-label">입력 (Input)</div>
+  <div class="input-row">
+    <div class="chip"><span class="dot dot-pdf"></span>PDF 문서 (base64 binary)</div>
+    <div class="chip"><span class="dot dot-xls"></span>Excel / CSV (텍스트 추출, 최대 300행)</div>
+    <div class="chip"><span class="dot dot-txt"></span>텍스트 직접 입력</div>
+  </div>
+  <div class="note">combinedText 생성 → 80,000자 상한 적용 → /api/analyze 전송</div>
+
+  <div class="conn">
+    <div class="conn-line"></div>
+    <div class="conn-tip"></div>
+    <div class="conn-note">prompt + systemInstruction + schema → Vertex AI</div>
+  </div>
+
+  <!-- STEP 01 -->
+  <div class="card" id="c1" onclick="tog('c1')">
+    <div class="card-head">
+      <span class="step-pill">STEP 01</span>
+      <span class="card-title">추출 에이전트 (Intake)</span>
+      <span class="badge badge-ai">AI Agent</span>
+      <span class="expand-icon" id="ic1">[ 펼치기 ]</span>
+    </div>
+    <div class="card-body">
+      <div class="grid2">
+        <div class="cell">
+          <div class="cell-label">역할</div>
+          <div class="cell-val">RFP·회의록·Dev.AI 산출물에서 기능/비기능 요구사항 원문 추출. 원본 ID 100% 보존, 행 순서 유지.</div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">입력</div>
+          <div class="mono">combinedText<br>(PDF binary + 텍스트)</div>
+          <div class="warn-tag">&#9888; 131,072 토큰 상한</div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">출력 스키마</div>
+          <div class="mono">raw_functional_reqs[ ]<br>raw_non_functional_reqs[ ]</div>
+          <div class="tags"><span class="tag">id</span><span class="tag">title</span><span class="tag">detail</span></div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">프롬프트 규칙</div>
+          <div class="cell-val">데이터 무결성 절대 준수 · ID 조작 금지 · 스키마 엄수 · 순수 JSON 반환 · 최대 3회 retry</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="conn">
+    <div class="conn-line"></div>
+    <div class="conn-tip"></div>
+    <div class="conn-note">JSON.stringify(extractedData)</div>
+  </div>
+
+  <!-- STEP 02 -->
+  <div class="card" id="c2" onclick="tog('c2')">
+    <div class="card-head">
+      <span class="step-pill">STEP 02</span>
+      <span class="card-title">최적화 엔진 (Logic Architect)</span>
+      <span class="badge badge-ai">AI Agent</span>
+      <span class="expand-icon" id="ic2">[ 펼치기 ]</span>
+    </div>
+    <div class="card-body">
+      <div class="grid2">
+        <div class="cell">
+          <div class="cell-label">역할</div>
+          <div class="cell-val">중복 제거, 우선순위 분류(상/중/하), REQ-ID 재명명, 모호성 탐지, 요구사항 정의서 구조화.</div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">REQ-ID 명명 규칙</div>
+          <div class="mono" style="font-size:10px;">REQ-{분류}-{L1 2자리}-{L2 3자리}<br>USR·ADM·SRV·API·UX·CMN·INT·NFR</div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">출력 스키마</div>
+          <div class="mono">optimization_summary{ }<br>optimized_requirements[ ]</div>
+          <div class="tags"><span class="tag">요구사항ID</span><span class="tag">우선순위</span><span class="tag">ambiguity_hitl</span><span class="tag">related_reqs</span></div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">관계 유형</div>
+          <div class="tags" style="margin-top:0;"><span class="tag">중복</span><span class="tag">통합</span><span class="tag">연결</span><span class="tag">충돌</span></div>
+          <div class="cell-val" style="margin-top:6px;">→ related_reqs 배열에 기록</div>
+        </div>
+      </div>
+      <div class="branch-row">
+        <div class="branch">
+          <div class="branch-title" style="color:#993C1D;">모호성 HITL 트리거</div>
+          <div class="branch-sub">is_ambiguous: true → original_text + 대안 2개 제시 → PM 판단 요청</div>
+        </div>
+        <div class="branch">
+          <div class="branch-title" style="color:#534AB7;">우선순위 판단</div>
+          <div class="branch-sub">상: 핵심 비즈니스 기능 / 중: 보조 기능 / 하: 개선·편의 기능</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="conn">
+    <div class="conn-line"></div>
+    <div class="conn-tip"></div>
+    <div class="conn-note">JSON.stringify(optimized_requirements)</div>
+  </div>
+
+  <!-- STEP 03 -->
+  <div class="card" id="c3" onclick="tog('c3')">
+    <div class="card-head">
+      <span class="step-pill">STEP 03</span>
+      <span class="card-title">충돌 검증 에이전트 (Verification)</span>
+      <span class="badge badge-ai">AI Agent</span>
+      <span class="expand-icon" id="ic3">[ 펼치기 ]</span>
+    </div>
+    <div class="card-body">
+      <div class="grid2">
+        <div class="cell">
+          <div class="cell-label">역할</div>
+          <div class="cell-val">요구사항 간 정책 충돌 탐지. conflict_id 생성, 관련 ID 배열화, 충돌 사유 및 대안 옵션 제시.</div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">출력 스키마</div>
+          <div class="mono">conflicts[ ]</div>
+          <div class="tags"><span class="tag">conflict_id</span><span class="tag">involved_req_ids</span><span class="tag">conflict_reason</span><span class="tag">suggested_options</span></div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">HITL 트리거</div>
+          <div class="cell-val">충돌 감지 시 → PM 클릭으로 대안 선택 → optimized_requirements에 HITL 확정 항목 추가</div>
+        </div>
+        <div class="cell">
+          <div class="cell-label">재시도 정책</div>
+          <div class="cell-val">최대 3회 retry · 지수 backoff (2s → 3s → 4.5s) · 429 과금 한도 감지 시 조기 종료</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="conn">
+    <div class="conn-line"></div>
+    <div class="conn-tip"></div>
+    <div class="conn-note">결과 렌더링 + Excel export</div>
+  </div>
+
+  <div class="zone-label">출력 (Output)</div>
+  <div class="output-row">
+    <div class="out-chip">
+      <div class="out-icon" style="background:#EAF3DE;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#3B6D11" stroke-width="1.2"/><line x1="5" y1="6" x2="11" y2="6" stroke="#3B6D11" stroke-width="1"/><line x1="5" y1="9" x2="11" y2="9" stroke="#3B6D11" stroke-width="1"/></svg>
+      </div>
+      <div>
+        <div class="out-label">요구사항정의서 탭</div>
+        <div class="out-sub">기능 / 비기능 / 충돌 / 원본 서브탭</div>
+      </div>
+    </div>
+    <div class="out-chip">
+      <div class="out-icon" style="background:#EEEDFE;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M8 3l5 5-5 5" stroke="#534AB7" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div>
+        <div class="out-label">HITL 모달</div>
+        <div class="out-sub">모호성 · 충돌 PM 의사결정</div>
+      </div>
+    </div>
+    <div class="out-chip">
+      <div class="out-icon" style="background:#FAECE7;">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="10" rx="1.5" stroke="#993C1D" stroke-width="1.2"/><line x1="5" y1="7" x2="11" y2="7" stroke="#993C1D" stroke-width="1"/><line x1="5" y1="10" x2="9" y2="10" stroke="#993C1D" stroke-width="1"/></svg>
+      </div>
+      <div>
+        <div class="out-label">Excel Export</div>
+        <div class="out-sub">요구사항정의서_SPINE.xlsx · 4 sheets</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function tog(id) {
+  const c = document.getElementById(id);
+  const ic = document.getElementById('ic' + id.slice(1));
+  const isOpen = c.classList.contains('open');
+  c.classList.toggle('open', !isOpen);
+  ic.textContent = isOpen ? '[ 펼치기 ]' : '[ 접기 ]';
+}
+</script>
+</body>
+</html>

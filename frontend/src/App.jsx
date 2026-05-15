@@ -466,6 +466,10 @@ const App = () => {
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
+                    <button onClick={() => window.open('/spine-pipeline.html', '_blank')} className="flex items-center gap-2 bg-white hover:bg-pagebg px-3 py-1.5 rounded border border-borderline text-sub hover:text-primary transition-all active:scale-95">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
+                        <span className="text-[10px] font-bold uppercase tracking-widest">Pipeline</span>
+                    </button>
                     <div className="flex items-center gap-2 bg-pagebg px-3 py-1.5 rounded border border-borderline">
                         <span className="w-2 h-2 rounded-full bg-green-500"></span>
                         <span className="text-[10px] font-bold text-sub uppercase tracking-widest">Engine Ready</span>
