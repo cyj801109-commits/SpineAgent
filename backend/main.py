@@ -72,8 +72,9 @@ async def analyze(req: AnalyzeRequest):
             content_parts,
             generation_config=GenerationConfig(
                 response_mime_type="application/json",
-                temperature=0.1,
+                temperature=0.2,
                 top_p=0.6,
+                top_k=40,
                 max_output_tokens=65536,
             ),
         )
