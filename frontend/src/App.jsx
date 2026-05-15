@@ -1,5 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import * as pdfjsLib from 'pdfjs-dist';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.mjs',
+    import.meta.url
+).toString();
+
+const MAX_EXCEL_ROWS = 300;
+const MAX_PDF_PAGES = 50;
+const MAX_COMBINED_CHARS = 80000;
 
 // --- All Icons Defined (inline SVG, same as original) ---
 const Layers = ({className, size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>;
@@ -37,8 +47,9 @@ const App = () => {
     const [optimizedReqs, setOptimizedReqs] = useState([]);
     const [conflicts, setConflicts] = useState([]);
 
-    // Error State
+    // Error & Warning State
     const [errorMessage, setErrorMessage] = useState(null);
+    const [truncationWarning, setTruncationWarning] = useState(null);
 
     // Tab State
     const [activeTab, setActiveTab] = useState('요구사항정의서');
@@ -87,9 +98,30 @@ const App = () => {
     };
 
     const parseFileContent = async (file) => {
+        const ext = file.name.split('.').pop().toLowerCase();
+
+        if (ext === 'pdf') {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const totalPages = pdf.numPages;
+            const pagesToRead = Math.min(totalPages, MAX_PDF_PAGES);
+            const pages = [];
+            for (let i = 1; i <= pagesToRead; i++) {
+                const page = await pdf.getPage(i);
+                const content = await page.getTextContent();
+                const text = content.items.map(item => item.str).join(' ');
+                pages.push(`--- [PAGE ${i}] ---\n${text}`);
+            }
+            let result = pages.join('\n\n');
+            if (totalPages > MAX_PDF_PAGES) {
+                result += `\n\n... (이하 ${totalPages - MAX_PDF_PAGES}페이지 생략 - 토큰 제한으로 상위 ${MAX_PDF_PAGES}페이지만 분석)`;
+                setTruncationWarning(prev => prev || `PDF: 상위 ${MAX_PDF_PAGES}페이지만 분석`);
+            }
+            return result;
+        }
+
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
-            const ext = file.name.split('.').pop().toLowerCase();
             reader.onload = (e) => {
                 try {
                     if (ext === 'xlsx' || ext === 'xls') {
@@ -97,7 +129,14 @@ const App = () => {
                         const workbook = XLSX.read(data, { type: 'array' });
                         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
                         const json = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
-                        resolve(json.map(row => row.join('\t')).join('\n'));
+                        const totalRows = json.length;
+                        const rows = json.slice(0, MAX_EXCEL_ROWS);
+                        let result = rows.map(row => row.join('\t')).join('\n');
+                        if (totalRows > MAX_EXCEL_ROWS) {
+                            result += `\n\n... (이하 ${totalRows - MAX_EXCEL_ROWS}행 생략 - 토큰 제한으로 상위 ${MAX_EXCEL_ROWS}행만 분석)`;
+                            setTruncationWarning(prev => prev || `엑셀: 상위 ${MAX_EXCEL_ROWS}행만 분석`);
+                        }
+                        resolve(result);
                     } else {
                         resolve(e.target.result);
                     }
@@ -245,6 +284,7 @@ const App = () => {
         setIsAnalyzing(true);
         setErrorMessage(null);
         setMetrics(null);
+        setTruncationWarning(null);
 
         try {
             setProgressStep(0);
@@ -258,6 +298,10 @@ const App = () => {
                 }
             }
             if (!combinedText.trim()) throw new Error("분석할 요구사항 데이터가 없습니다. 파일을 업로드하거나 텍스트를 입력해 주세요.");
+            if (combinedText.length > MAX_COMBINED_CHARS) {
+                combinedText = combinedText.substring(0, MAX_COMBINED_CHARS) + '\n\n[입력 데이터가 너무 커서 일부가 잘렸습니다. 파일을 분할하여 업로드해주세요.]';
+                setTruncationWarning(prev => prev ? prev + ' / 전체 입력 80,000자 초과로 잘림' : '전체 입력 80,000자 초과로 일부 잘림');
+            }
             setProgressStep(1);
 
             const coreSystemPrompt = `당신은 SI 프로젝트의 척추 역할을 하는 'PM 보조 의사결정 에이전트'임.
@@ -469,8 +513,8 @@ const App = () => {
                         <div className="mb-6 space-y-3">
                             <div onClick={() => fileInputRef.current.click()} className="border-2 border-dashed border-borderline rounded p-6 flex flex-col items-center justify-center gap-3 hover:bg-pagebg hover:border-accent cursor-pointer transition-all text-center group">
                                 <Plus size={24} className="text-sub group-hover:text-accent transition-colors" />
-                                <p className="text-[11px] font-bold text-sub uppercase tracking-widest group-hover:text-accent transition-colors">Excel/CSV 업로드</p>
-                                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple accept=".csv,.xlsx,.xls,.txt" />
+                                <p className="text-[11px] font-bold text-sub uppercase tracking-widest group-hover:text-accent transition-colors">Excel/CSV/PDF 업로드</p>
+                                <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple accept=".csv,.xlsx,.xls,.txt,.pdf" />
                             </div>
                             <div className="max-h-[120px] overflow-y-auto space-y-2 pr-2">
                                 {uploadedFiles.map(file => (
@@ -491,6 +535,13 @@ const App = () => {
                 </div>
 
                 <div className="lg:col-span-9 h-full flex flex-col space-y-6 w-full min-w-0">
+                    {truncationWarning && !isAnalyzing && (
+                        <div className="bg-amber-50 border border-amber-300 text-amber-800 px-4 py-3 rounded-lg flex items-center gap-3 text-sm font-bold animate-in fade-in shrink-0">
+                            <AlertTriangle size={16} className="shrink-0 text-amber-500" />
+                            <span>파일 크기가 커서 일부만 분석합니다. ({truncationWarning})</span>
+                            <button onClick={() => setTruncationWarning(null)} className="ml-auto text-amber-500 hover:text-amber-700"><X size={14}/></button>
+                        </div>
+                    )}
                     {metrics && !isAnalyzing && !errorMessage && (
                         <div className="bg-white p-6 rounded-lg border border-borderline shadow-sm animate-in fade-in shrink-0">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
