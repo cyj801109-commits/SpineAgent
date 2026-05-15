@@ -845,7 +845,7 @@ const App = () => {
                                     </tbody>
                                 </table>
                             ) : (
-                                <div className="rounded border border-borderline overflow-hidden shadow-sm bg-white">
+                                <div className="rounded border border-borderline shadow-sm bg-white">
                                     {activeTab === '충돌' ? renderConflictsTable() : renderRawTable(activeTab === '기능' ? rawFunc : rawNonFunc)}
                                 </div>
                             )}
