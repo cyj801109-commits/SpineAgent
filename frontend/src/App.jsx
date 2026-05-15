@@ -58,8 +58,8 @@ const App = () => {
     const processingSteps = [
         { title: "데이터 파싱", desc: "텍스트 및 엑셀 데이터 추출 준비" },
         { title: "관계망 구축 준비", desc: "파싱된 데이터 구조화" },
-        { title: "연관성 분석 진행", desc: "원본 요구사항 데이터 추출 중 (API Task 1)" },
-        { title: "추출 완료", desc: "기능/비기능 요구사항 분리 완료" },
+        { title: "UIUX 관련성 3단계 판단", desc: "원본 요구사항 데이터 추출 중 (API Task 1)" },
+        { title: "UIUX 선별 완료", desc: "UIUX 관련/제외 요구사항 분리 완료" },
         { title: "리소스 최적화 및 모호성 분석", desc: "요구사항 구체화 중 (API Task 2)" },
         { title: "최적화 완료", desc: "표준 양식 매핑 완료" },
         { title: "정책 충돌 탐지", desc: "상호 배타적 요건 검증 중 (API Task 3)" },
@@ -292,74 +292,121 @@ const App = () => {
             }
             setProgressStep(1);
 
-            const coreSystemPrompt = `당신은 SI 프로젝트의 척추 역할을 하는 'PM 보조 의사결정 에이전트'임.
-[데이터 무결성 절대 준수 규칙 - 위반 시 시스템 심각한 오류 발생]
-1. 원본성 및 순서 유지: raw_functional_reqs 및 raw_non_functional_reqs 배열 추출 시, 입력된 텍스트/엑셀의 '물리적 행(Row) 순서'를 절대 임의로 정렬(Sort)하지 말 것.
-2. ID 조작 금지: 이빨이 빠진 번호가 있더라도 임의로 숫자를 채워넣지 말고, 원본 텍스트에 있는 ID를 100% 그대로 추출할 것.
-3. 매핑 정확도: optimized_requirements 내의 related_reqs.target_id는 반드시 원본 ID와 완벽히 일치해야 함.
-4. 스키마 엄수: JSON 스키마에 정의되지 않은 임의의 텍스트를 절대 추가하지 말 것. 오직 스키마가 요청한 내용만 답변할 것.
-5. 토큰 최적화: 출력 제한(Max Tokens)에 걸리지 않도록 고객_요구사항_상세_내용 및 판단 근거 등은 핵심만 간결하게 요약하여 작성할 것.
+            const coreSystemPrompt = `당신은 14년 경력의 SI UIUX 기획자로,
+RFP 및 요구사항 문서에서 UIUX 관련 항목을 선별하고 기획자 언어로 구체화하는 전문가임.
 
-[요구사항 ID 명명 규칙 (반드시 적용)]
-구조: REQ-{분류영문}-{Level1(2자리)}-{Level2/3(3자리)} (예: REQ-USR-01-001)
-- Level1 분류영문/코드: USR(01:사용자), ADM(02:관리자), SRV(03:서버), API(04:API), UX(05:UI/UX), CMN(06:공통), INT(07:외부연동), NFR(18:비기능)
-- Level2/3 코드: 01(로그인), 02(로그아웃), 03(메인화면), 04(통합검색), 05(MySpace), 06(프로젝트수정), 07(프로젝트정보), 08(게시판/프로젝트), 09(Help/산출물), 10(코드관리), 11(권한관리), 35(성능), 37(산출물) 등 문맥에 맞게 유추하여 할당.`;
+[UIUX 관련성 판단 3단계 로직 — 반드시 준수]
+STEP 1. Out of Scope 판단: 아래 항목은 UIUX 범위 외로 1차 제외한다.
+- PM 영역: 디자인시스템 정의, WBS, 일정, 예산
+- 컴플라이언스: 개인정보처리방침, 보안정책
+- 인프라: 서버 튜닝, 수수료 계산, 배치, DB 설계
+
+STEP 2. Context Recovery: STEP 1 제외 항목이라도 아래 UI 키워드 포함 시
+'Conditional'로 분류하여 STEP 3에서 재판단한다.
+- 복구 키워드: 화면, 조회UI, 노출, 버튼, 클릭, 팝업, 모달, 입력폼, 레이아웃
+
+STEP 3. 최종 판단 기준: "개발자가 이 항목을 위해 화면을 코딩해야 하는가?"
+- 기능/정책 요건 → 포함 (O)
+- 비기능 + Context Recovery 성공 → 포함 (O)
+- 비기능 + Context Recovery 실패 → 제외 (X)
+
+[요구사항 최적화 판단 — 4가지 Candidate 유형]
+선별된 UIUX 요구사항에 대해 아래 유형으로 분류하여 related_reqs에 반영한다.
+- Merge Candidate: 유사 기능·공통 정책으로 통합 가능한 요구사항 → relation_type: "통합"
+- Split Candidate: 서로 다른 화면·담당자가 혼재된 요구사항 → relation_type: "연결"
+- Remove Candidate: 완전 중복·UIUX 범위 외 → excluded_reqs로 분류
+- Re-scope Candidate: 현재 범위 초과·의존성 미충족 → 제약사항 필드에 명시
+
+[FO/BO 구분 기준]
+- FO(Front Office): 일반 사용자가 직접 접근하는 화면
+- BO(Back Office): 관리자/운영자가 사용하는 화면
+- 판단 불가 시 TBD 표기
+
+[화면 본수 추정 기준]
+- 단일 기능 단순 화면: 1본
+- 탭/단계 구분 있는 화면: 2~3본
+- 목록+상세 구조: 2본
+- 판단 불가 시 TBD 표기
+
+[모호 표현 구체화 — 반드시 적용]
+- "직관적인 UI" → "3클릭 이내 목표 달성 구조"
+- "사용자 편의성 고려" → "접근성 WCAG 2.1 AA 준수"
+- "최적화된 폼" → "입력 필드 자동완성, 실시간 유효성 검사"
+- "빠른 응답" → "API P95 응답 3초 이내"
+- 위 예시처럼 측정 가능한 기준으로 반드시 재서술할 것
+
+[데이터 무결성 규칙]
+1. 원본 ID 100% 그대로 추출, 임의 변경 금지
+2. 물리적 행 순서 유지, 임의 정렬 금지
+3. JSON 스키마 외 텍스트 추가 금지
+4. 상세내용은 핵심만 간결하게 요약하여 출력 제한 방지
+
+[요구사항 ID 명명 규칙]
+구조: REQ-{분류영문}-{Level1(2자리)}-{Level2(3자리)}
+- FO-USR(01), FO-ADM(02), BO-ADM(03), BO-SRV(04), CMN(05), NFR(06)
+- Level2: 01(로그인), 02(로그아웃), 03(메인화면), 04(통합검색), 05(MySpace),
+  06(프로젝트수정), 07(프로젝트정보), 08(게시판), 09(Help/산출물),
+  10(코드관리), 11(권한관리), 35(성능), 37(산출물) — 문맥에 맞게 유추 할당`;
 
             // Task 1: 추출 에이전트
             setProgressStep(2);
             const schema1 = `{
-              "raw_functional_reqs": [
-                { "id": "원본ID", "title": "원본 요구사항명", "detail": "내용" }
-              ],
-              "raw_non_functional_reqs": [
-                { "id": "원본ID", "title": "원본 요구사항명", "detail": "내용" }
-              ]
-            }`;
+  "uiux_functional_reqs": [
+    { "id": "원본ID", "title": "요구사항명", "detail": "내용", "uiux_relevant": true }
+  ],
+  "excluded_reqs": [
+    { "id": "원본ID", "title": "요구사항명", "exclude_reason": "제외 사유" }
+  ]
+}`;
 
             const extractedData = await callBackendAPI(combinedText, coreSystemPrompt, schema1, pdfFilesB64);
-            setRawFunc(extractedData.raw_functional_reqs || []);
-            setRawNonFunc(extractedData.raw_non_functional_reqs || []);
+            setRawFunc(extractedData.uiux_functional_reqs || []);
+            setRawNonFunc(extractedData.excluded_reqs || []);
             setProgressStep(3);
 
             // Task 2: 최적화 및 구체화 에이전트
             setProgressStep(4);
             const schema2 = `{
-              "optimization_summary": {
-                "reduction_prediction": "절감 수치 (예: 약 30%)",
-                "reduction_reason": "전체 관점에서의 절감 예측 이유 및 판단 근거 상세 설명",
-                "ambiguity_resolved_count": 0,
-                "conflict_req_count": 0
-              },
-              "optimized_requirements": [
-                {
-                  "NO": 1,
-                  "요구사항ID": "새로운 명명규칙을 따른 ID",
-                  "업무분류": "대분류",
-                  "업무_대": "업무명",
-                  "기능_중": "기능명",
-                  "구성_소": "상세구성",
-                  "요구정의명": "명확한 기능명",
-                  "고객_요구사항_상세_내용": "모호성이 제거된 명확한 산정 기준 및 요건 명시",
-                  "제약사항": "SW 제약사항 등",
-                  "요건_발생일": "YYYY-MM-DD",
-                  "요구사항유형분류": { "분류": "기능/비기능", "유형": "세부 유형" },
-                  "우선순위": "상/중/하",
-                  "related_reqs": [
-                    {
-                      "target_id": "관련된 원본 요구사항 ID",
-                      "relation_type": "중복/통합/연결/충돌 중 택 1",
-                      "reason": "해당 관계성으로 판단한 이유나 근거 설명"
-                    }
-                  ],
-                  "ambiguity_hitl": {
-                    "is_ambiguous": true,
-                    "original_text": "원문",
-                    "ambiguity_reason": "모호한 사유",
-                    "suggested_options": ["대안 1", "대안 2"]
-                  }
-                }
-              ]
-            }`;
+  "optimization_summary": {
+    "total_input_count": 0,
+    "uiux_selected_count": 0,
+    "excluded_count": 0,
+    "ambiguity_resolved_count": 0,
+    "selection_reason": "선별 판단 근거 요약"
+  },
+  "optimized_requirements": [
+    {
+      "NO": 1,
+      "요구사항ID": "REQ-FO-USR-01-001",
+      "fo_bo": "FO/BO/TBD",
+      "화면본수": "1본/TBD",
+      "업무분류": "대분류",
+      "업무_대": "업무명",
+      "기능_중": "기능명",
+      "구성_소": "상세구성",
+      "요구정의명": "명확한 기능명",
+      "고객_요구사항_상세_내용": "모호성 제거된 구체적 요건",
+      "uiux_relevance_step": "STEP1통과/STEP2복구/STEP3확정",
+      "제약사항": "제약사항 또는 Re-scope 사유",
+      "요건_발생일": "YYYY-MM-DD",
+      "요구사항유형분류": { "분류": "기능/비기능", "유형": "세부유형" },
+      "우선순위": "상/중/하",
+      "related_reqs": [
+        {
+          "target_id": "원본ID",
+          "relation_type": "중복/통합/연결/충돌",
+          "reason": "Merge·Split·Remove·Re-scope 판단 근거"
+        }
+      ],
+      "ambiguity_hitl": {
+        "is_ambiguous": false,
+        "original_text": "원문 그대로 보존",
+        "ambiguity_reason": "모호 사유",
+        "suggested_options": ["정량 대안1", "정량 대안2"]
+      }
+    }
+  ]
+}`;
 
             const optimizedData = await callBackendAPI(JSON.stringify(extractedData), coreSystemPrompt, schema2);
             setMetrics(optimizedData.optimization_summary);
@@ -369,15 +416,24 @@ const App = () => {
             // Task 3: 정책 충돌 검증 에이전트
             setProgressStep(6);
             const schema3 = `{
-              "conflicts": [
-                {
-                  "conflict_id": "C-001",
-                  "involved_req_ids": ["충돌 원본 ID 배열"],
-                  "conflict_reason": "충돌 사유 및 리스크",
-                  "suggested_options": ["대안 1", "대안 2"]
-                }
-              ]
-            }`;
+  "conflicts": [
+    {
+      "conflict_id": "C-001",
+      "involved_req_ids": ["충돌 원본 ID 배열"],
+      "conflict_reason": "충돌 사유 및 리스크",
+      "option_a": {
+        "description": "첫 번째 요구사항 채택 시 화면 동작 방식",
+        "risk": "채택 시 발생하는 리스크"
+      },
+      "option_b": {
+        "description": "두 번째 요구사항 채택 시 화면 동작 방식",
+        "risk": "채택 시 발생하는 리스크"
+      },
+      "recommendation": "SPINE 추천안 및 근거 (결정 권한은 사용자)",
+      "impact_scope": "선택에 따라 영향받는 연관 요구사항 범위"
+    }
+  ]
+}`;
 
             const conflictData = await callBackendAPI(JSON.stringify(optimizedData.optimized_requirements), coreSystemPrompt, schema3);
             setConflicts(conflictData.conflicts || []);
@@ -461,8 +517,8 @@ const App = () => {
                 <div className="flex items-center gap-4 text-primary">
                     <div className="w-10 h-10 bg-primary rounded flex items-center justify-center text-white"><Layers /></div>
                     <div>
-                        <h1 className="text-xl tracking-tight leading-none font-bold">요구사항정의서 생성 에이전트</h1>
-                        <p className="text-[10px] text-sub tracking-widest uppercase mt-1 font-bold">The Backbone of SI Projects</p>
+                        <h1 className="text-xl tracking-tight leading-none font-bold">UIUX 요구사항 선별 에이전트</h1>
+                        <p className="text-[10px] text-sub tracking-widest uppercase mt-1 font-bold">RFP에서 UIUX 기획자 관점으로</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -538,8 +594,8 @@ const App = () => {
                         <div className="bg-white p-6 rounded-lg border border-borderline shadow-sm animate-in fade-in shrink-0">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                                 <div className="bg-white rounded-lg p-5 border border-borderline shadow-sm flex flex-col justify-center">
-                                    <p className="text-[11px] font-bold uppercase text-sub mb-1">최적화</p>
-                                    <p className="text-3xl font-bold text-accent">{metrics.reduction_prediction}</p>
+                                    <p className="text-[11px] font-bold uppercase text-sub mb-1">UIUX 선별</p>
+                                    <p className="text-3xl font-bold text-accent">{metrics.uiux_selected_count}<span className="text-sm ml-1 font-bold text-sub">/{metrics.total_input_count}</span></p>
                                 </div>
                                 <div className="bg-white rounded-lg p-5 border border-borderline shadow-sm flex flex-col justify-center">
                                     <p className="text-[11px] font-bold text-sub mb-1">모호성 보정</p>
@@ -550,19 +606,19 @@ const App = () => {
                                     <p className="text-3xl font-bold text-rose-500">{metrics.conflict_req_count}<span className="text-sm ml-1 font-bold text-sub">건</span></p>
                                 </div>
                             </div>
-                            <div className="bg-pagebg border border-borderline p-4 rounded text-sm text-primary leading-relaxed font-normal">"{metrics.reduction_reason}"</div>
+                            <div className="bg-pagebg border border-borderline p-4 rounded text-sm text-primary leading-relaxed font-normal">"{metrics.selection_reason}"</div>
                         </div>
                     )}
 
                     <div className="flex flex-col flex-1 min-h-[400px] relative w-full min-w-0">
                         {!isAnalyzing && metrics && !errorMessage && (
                             <div className="flex gap-0 px-2 shrink-0 overflow-x-auto text-primary z-20 relative">
-                                {['기능', '비기능', '요구사항정의서', '충돌'].map(tab => (
+                                {['UIUX 선별', '제외 항목', '요구사항정의서', '충돌'].map(tab => (
                                     <button key={tab}
                                             onClick={() => setActiveTab(tab)}
                                             className={`tab-btn px-6 py-3 rounded-t text-xs flex items-center gap-2 ${activeTab === tab ? (tab === '충돌' ? 'tab-conflict-active' : 'tab-active') : 'tab-inactive'}`}>
                                         {tab}
-                                        <span className="bg-pagebg px-2 py-0.5 rounded-full text-[10px] text-primary border border-borderline font-bold">{tab === '기능' ? rawFunc.length : tab === '비기능' ? rawNonFunc.length : tab === '요구사항정의서' ? optimizedReqs.length : conflicts.length}</span>
+                                        <span className="bg-pagebg px-2 py-0.5 rounded-full text-[10px] text-primary border border-borderline font-bold">{tab === 'UIUX 선별' ? rawFunc.length : tab === '제외 항목' ? rawNonFunc.length : tab === '요구사항정의서' ? optimizedReqs.length : conflicts.length}</span>
                                     </button>
                                 ))}
                             </div>
@@ -608,12 +664,12 @@ const App = () => {
                                     {!isAnalyzing && !metrics && !errorMessage && (
                                         <div className="h-full flex flex-col items-center justify-center text-sub py-40">
                                             <Layers size={48} className="mb-4 text-borderline" />
-                                            <p className="text-lg font-bold tracking-tight text-primary mb-2 uppercase">"요구사항이 흔들리면 프로젝트가 흔들립니다."</p>
-                                            <p className="text-sm font-normal text-sub max-w-sm text-center">조용하지만 단단하게, 프로젝트의 뼈대를 묵묵히 지탱하는 척추(SPINE) 역할을 수행합니다.</p>
+                                            <p className="text-lg font-bold tracking-tight text-primary mb-2 uppercase">"RFP에서 UIUX 요구사항만 정확히 선별합니다."</p>
+                                            <p className="text-sm font-normal text-sub max-w-sm text-center">14년 경력의 SI UIUX 기획자 관점으로, 화면 기획에 필요한 요구사항만 골라냅니다.</p>
                                         </div>
                                     )}
 
-                                    {!isAnalyzing && !errorMessage && (activeTab === '기능' || activeTab === '비기능') && (activeTab === '기능' ? rawFunc.length > 0 : rawNonFunc.length > 0) && renderRawTable(activeTab === '기능' ? rawFunc : rawNonFunc)}
+                                    {!isAnalyzing && !errorMessage && (activeTab === 'UIUX 선별' || activeTab === '제외 항목') && (activeTab === 'UIUX 선별' ? rawFunc.length > 0 : rawNonFunc.length > 0) && renderRawTable(activeTab === 'UIUX 선별' ? rawFunc : rawNonFunc)}
 
                                     {!isAnalyzing && !errorMessage && activeTab === '요구사항정의서' && optimizedReqs.length > 0 && (
                                         <table className="w-full text-left text-xs border-collapse min-w-[1200px] bg-white text-primary">
@@ -621,6 +677,9 @@ const App = () => {
                                                 <tr>
                                                     <th className="p-4 w-12 text-center border-r border-borderline">NO</th>
                                                     <th className="p-4 w-36 border-r border-borderline">요구사항ID</th>
+                                                    <th className="p-4 border-r border-borderline">FO/BO</th>
+                                                    <th className="p-4 border-r border-borderline">화면본수</th>
+                                                    <th className="p-4 border-r border-borderline">판단단계</th>
                                                     <th className="p-4 w-20 border-r border-borderline">업무분류</th>
                                                     <th className="p-4 w-24 border-r border-borderline">업무_대</th>
                                                     <th className="p-4 w-24 border-r border-borderline">기능_중</th>
@@ -634,6 +693,9 @@ const App = () => {
                                                     <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => setSelectedItem({type: 'opt', data: r})}>
                                                         <td className="p-4 text-center text-sub border-r border-borderline">{r.NO}</td>
                                                         <td className="p-4 font-bold text-primary tracking-wider border-r border-borderline">{r.요구사항ID}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{r.fo_bo || 'TBD'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{r.화면본수 || 'TBD'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline text-[10px]">{r.uiux_relevance_step || '-'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{r.업무분류}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{r.업무_대}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{r.기능_중}</td>
@@ -774,7 +836,7 @@ const App = () => {
                                 </>
                             )}
                         </div>
-                        <div className="p-4 bg-pagebg border-t border-borderline text-center rounded-b-lg"><p className="text-[10px] font-bold text-sub tracking-widest uppercase">요구사항정의서 생성 에이전트 Pipeline Framework v1.0</p></div>
+                        <div className="p-4 bg-pagebg border-t border-borderline text-center rounded-b-lg"><p className="text-[10px] font-bold text-sub tracking-widest uppercase">UIUX 요구사항 선별 에이전트 Pipeline Framework v1.0</p></div>
                     </div>
                 </div>
             )}
@@ -795,7 +857,7 @@ const App = () => {
                                 </div>
                             </div>
                             <div className="flex gap-0 relative z-20">
-                                {['기능', '비기능', '요구사항정의서', '충돌'].map(tab => (
+                                {['UIUX 선별', '제외 항목', '요구사항정의서', '충돌'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-btn px-8 py-3 rounded-t text-sm font-bold transition-all ${activeTab === tab ? (tab === '충돌' ? 'tab-conflict-active' : 'tab-active') : 'tab-inactive'}`}>{tab}</button>
                                 ))}
                             </div>
@@ -807,6 +869,9 @@ const App = () => {
                                         <tr>
                                             <th className="p-4 w-12 text-center border-r border-borderline">NO</th>
                                             <th className="p-4 w-40 border-r border-borderline">요구사항ID</th>
+                                            <th className="p-4 border-r border-borderline">FO/BO</th>
+                                            <th className="p-4 border-r border-borderline">화면본수</th>
+                                            <th className="p-4 border-r border-borderline">판단단계</th>
                                             <th className="p-4 border-r border-borderline">업무분류</th>
                                             <th className="p-4 border-r border-borderline">업무_대</th>
                                             <th className="p-4 border-r border-borderline">기능_중</th>
@@ -825,6 +890,9 @@ const App = () => {
                                             <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all duration-200" onClick={() => { setSelectedItem({type: 'opt', data: r}); }}>
                                                 <td className="p-4 text-center text-sub border-r border-borderline">{r.NO}</td>
                                                 <td className="p-4 font-bold text-primary border-r border-borderline tracking-wider">{r.요구사항ID}</td>
+                                                <td className="p-4 border-r border-borderline">{r.fo_bo || 'TBD'}</td>
+                                                <td className="p-4 border-r border-borderline">{r.화면본수 || 'TBD'}</td>
+                                                <td className="p-4 border-r border-borderline text-[10px] text-sub">{r.uiux_relevance_step || '-'}</td>
                                                 <td className="p-4 border-r border-borderline">{r.업무분류}</td>
                                                 <td className="p-4 border-r border-borderline">{r.업무_대}</td>
                                                 <td className="p-4 border-r border-borderline">{r.기능_중}</td>
@@ -846,7 +914,7 @@ const App = () => {
                                 </table>
                             ) : (
                                 <div className="rounded border border-borderline shadow-sm bg-white">
-                                    {activeTab === '충돌' ? renderConflictsTable() : renderRawTable(activeTab === '기능' ? rawFunc : rawNonFunc)}
+                                    {activeTab === '충돌' ? renderConflictsTable() : renderRawTable(activeTab === 'UIUX 선별' ? rawFunc : rawNonFunc)}
                                 </div>
                             )}
                         </div>
