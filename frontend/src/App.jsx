@@ -1,14 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
-import * as pdfjsLib from 'pdfjs-dist';
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.mjs',
-    import.meta.url
-).toString();
 
 const MAX_EXCEL_ROWS = 300;
-const MAX_PDF_PAGES = 50;
 const MAX_COMBINED_CHARS = 80000;
 
 // --- All Icons Defined (inline SVG, same as original) ---
@@ -97,29 +90,17 @@ const App = () => {
         if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
+    const readFileAsBase64 = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    };
+
     const parseFileContent = async (file) => {
         const ext = file.name.split('.').pop().toLowerCase();
-
-        if (ext === 'pdf') {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            const totalPages = pdf.numPages;
-            const pagesToRead = Math.min(totalPages, MAX_PDF_PAGES);
-            const pages = [];
-            for (let i = 1; i <= pagesToRead; i++) {
-                const page = await pdf.getPage(i);
-                const content = await page.getTextContent();
-                const text = content.items.map(item => item.str).join(' ');
-                pages.push(`--- [PAGE ${i}] ---\n${text}`);
-            }
-            let result = pages.join('\n\n');
-            if (totalPages > MAX_PDF_PAGES) {
-                result += `\n\n... (이하 ${totalPages - MAX_PDF_PAGES}페이지 생략 - 토큰 제한으로 상위 ${MAX_PDF_PAGES}페이지만 분석)`;
-                setTruncationWarning(prev => prev || `PDF: 상위 ${MAX_PDF_PAGES}페이지만 분석`);
-            }
-            return result;
-        }
-
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -227,7 +208,7 @@ const App = () => {
         setSelectedItem(null);
     };
 
-    const callBackendAPI = async (promptData, systemInstruction, schemaDefinition) => {
+    const callBackendAPI = async (promptData, systemInstruction, schemaDefinition, pdfFiles = []) => {
         let retries = 3;
         let delay = 2000;
         while (retries > 0) {
@@ -239,7 +220,8 @@ const App = () => {
                         model: apiModel,
                         prompt: promptData,
                         systemInstruction: systemInstruction,
-                        schema: schemaDefinition
+                        schema: schemaDefinition,
+                        pdf_files: pdfFiles
                     })
                 });
 
@@ -289,15 +271,21 @@ const App = () => {
         try {
             setProgressStep(0);
             let combinedText = inputText;
+            const pdfFilesB64 = [];
             if (uploadedFiles.length > 0) {
                 for (const f of uploadedFiles) {
-                    if (f.originFile) {
+                    if (!f.originFile) continue;
+                    const ext = f.name.split('.').pop().toLowerCase();
+                    if (ext === 'pdf') {
+                        const b64 = await readFileAsBase64(f.originFile);
+                        pdfFilesB64.push({ name: f.name, data: b64 });
+                    } else {
                         const content = await parseFileContent(f.originFile);
                         combinedText += `\n\n--- [FILE: ${f.name}] ---\n${content}`;
                     }
                 }
             }
-            if (!combinedText.trim()) throw new Error("분석할 요구사항 데이터가 없습니다. 파일을 업로드하거나 텍스트를 입력해 주세요.");
+            if (!combinedText.trim() && pdfFilesB64.length === 0) throw new Error("분석할 요구사항 데이터가 없습니다. 파일을 업로드하거나 텍스트를 입력해 주세요.");
             if (combinedText.length > MAX_COMBINED_CHARS) {
                 combinedText = combinedText.substring(0, MAX_COMBINED_CHARS) + '\n\n[입력 데이터가 너무 커서 일부가 잘렸습니다. 파일을 분할하여 업로드해주세요.]';
                 setTruncationWarning(prev => prev ? prev + ' / 전체 입력 80,000자 초과로 잘림' : '전체 입력 80,000자 초과로 일부 잘림');
@@ -328,7 +316,7 @@ const App = () => {
               ]
             }`;
 
-            const extractedData = await callBackendAPI(combinedText, coreSystemPrompt, schema1);
+            const extractedData = await callBackendAPI(combinedText, coreSystemPrompt, schema1, pdfFilesB64);
             setRawFunc(extractedData.raw_functional_reqs || []);
             setRawNonFunc(extractedData.raw_non_functional_reqs || []);
             setProgressStep(3);

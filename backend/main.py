@@ -4,8 +4,9 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import vertexai
-from vertexai.generative_models import GenerativeModel, GenerationConfig
-import json, re, os, tempfile
+from vertexai.generative_models import GenerativeModel, GenerationConfig, Part
+import base64, json, re, os, tempfile
+from typing import Optional
 from pathlib import Path
 
 # Railway 환경에서 GCP 서비스 계정 인증 처리
@@ -33,11 +34,16 @@ app.add_middleware(
 async def health():
     return {"status": "ok"}
 
+class PdfFile(BaseModel):
+    name: str
+    data: str  # base64 encoded
+
 class AnalyzeRequest(BaseModel):
     model: str
     prompt: str
     systemInstruction: str
     schema: str
+    pdf_files: Optional[list[PdfFile]] = None
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
@@ -51,8 +57,19 @@ async def analyze(req: AnalyzeRequest):
             req.model,
             system_instruction=req.systemInstruction,
         )
+
+        # content parts 구성: PDF 바이너리 + 텍스트 프롬프트
+        content_parts = []
+        if req.pdf_files:
+            for pdf in req.pdf_files:
+                pdf_bytes = base64.b64decode(pdf.data)
+                content_parts.append(
+                    Part.from_data(data=pdf_bytes, mime_type="application/pdf")
+                )
+        content_parts.append(full_prompt)
+
         response = model.generate_content(
-            full_prompt,
+            content_parts,
             generation_config=GenerationConfig(
                 response_mime_type="application/json",
                 temperature=0.1,
