@@ -249,6 +249,112 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
     </div>
   </div>
 
+  <!-- UIUX 관련성 판단 기준 섹션 -->
+  <div style="margin-top:48px;">
+    <div class="zone-label">UIUX 관련성 판단 · 3단계 로직</div>
+
+    <!-- STEP 1 -->
+    <div class="card open" style="margin-bottom:8px;">
+      <div class="card-head">
+        <span class="step-pill">STEP 1</span>
+        <span class="card-title">Out of Scope 제외</span>
+        <span class="badge" style="background:#FEE2E2;color:#B91C1C;border:1px solid #FCA5A5;">1차 제외</span>
+      </div>
+      <div class="card-body" style="display:block;">
+        <div class="grid2">
+          <div class="cell"><div class="cell-label">PM 영역</div><div class="cell-val">디자인시스템 정의, WBS, 일정, 예산</div></div>
+          <div class="cell"><div class="cell-label">컴플라이언스</div><div class="cell-val">개인정보처리방침, 보안정책</div></div>
+          <div class="cell"><div class="cell-label">인프라</div><div class="cell-val">서버 튜닝, 수수료 계산, 배치</div></div>
+          <div class="cell"><div class="cell-label">데이터 아키텍처</div><div class="cell-val">DB 설계, 데이터 표준화·모델링·스키마·메타 정의, ETL 개발·운영, 데이터 수집·연계·마이그레이션·품질검증</div></div>
+        </div>
+        <div class="warn-tag" style="margin-top:12px;">※ 위 항목이라도 "화면에서 어떻게 보여줄지(시각화 방식, 컴포넌트 구조)" 포함 시 STEP 2에서 복구 가능</div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="card open" style="margin-bottom:8px;">
+      <div class="card-head">
+        <span class="step-pill">STEP 2</span>
+        <span class="card-title">Context Recovery</span>
+        <span class="badge" style="background:#FEF3C7;color:#92400E;border:1px solid #FCD34D;">조건부 복구</span>
+      </div>
+      <div class="card-body" style="display:block;">
+        <div class="cell" style="margin-top:14px;">
+          <div class="cell-label">복구 키워드</div>
+          <div class="tags" style="margin-top:8px;">
+            <span class="tag">화면</span><span class="tag">조회UI</span><span class="tag">노출</span><span class="tag">버튼</span><span class="tag">클릭</span><span class="tag">팝업</span><span class="tag">모달</span><span class="tag">입력폼</span><span class="tag">레이아웃</span><span class="tag">시각화 방식</span><span class="tag">컴포넌트 구조</span>
+          </div>
+        </div>
+        <div class="note" style="margin-top:10px;">STEP 1 제외 항목이 복구 키워드를 포함하면 'Conditional'로 분류 후 STEP 3 재판단</div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="card open" style="margin-bottom:32px;">
+      <div class="card-head">
+        <span class="step-pill">STEP 3</span>
+        <span class="card-title">최종 판단</span>
+        <span class="badge badge-out">최종 확정</span>
+      </div>
+      <div class="card-body" style="display:block;">
+        <div class="cell-label" style="margin-top:14px;">판단 기준: "UIUX 기획자가 화면 설계서(와이어프레임·스토리보드)를 직접 작성해야 하는가?"</div>
+        <div class="branch-row">
+          <div class="branch" style="border-left:3px solid #16A34A;">
+            <div class="branch-title">✓ 포함</div>
+            <div class="branch-sub">화면 설계서가 산출물인 항목</div>
+          </div>
+          <div class="branch" style="border-left:3px solid #DC2626;">
+            <div class="branch-title">✗ 제외</div>
+            <div class="branch-sub">데이터 설계서·아키텍처 문서·API 명세서가 산출물인 항목</div>
+          </div>
+          <div class="branch" style="border-left:3px solid #D97706;">
+            <div class="branch-title">△ 협의필요</div>
+            <div class="branch-sub">화면 설계와 데이터 설계가 혼재 → review_role: 협의필요로 포함</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- review_role -->
+    <div class="zone-label">담당 범위 분류 · review_role</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:32px;">
+      <div class="cell" style="border-left:4px solid #D4692A;">
+        <div class="cell-label" style="color:#D4692A;">직접담당</div>
+        <div class="cell-val">업무분류가 UI/UX이거나 UIUX 기획자가 화면 설계서를 직접 작성하는 항목</div>
+      </div>
+      <div class="cell" style="border-left:4px solid #D97706;">
+        <div class="cell-label" style="color:#D97706;">협의필요</div>
+        <div class="cell-val">다른 팀 주담당이지만 화면 영향도가 있어 UIUX 검토가 필요한 항목</div>
+      </div>
+      <div class="cell" style="border-left:4px solid #94A3B8;">
+        <div class="cell-label" style="color:#94A3B8;">인지필요</div>
+        <div class="cell-val">화면 직접 관련은 없으나 성능·접근성 기준 등 UIUX가 알아야 할 항목</div>
+      </div>
+    </div>
+
+    <!-- relation_type -->
+    <div class="zone-label">요구사항 관계 유형 · relation_type</div>
+    <div class="card open">
+      <div class="card-body" style="display:block;padding-top:14px;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="border-bottom:1px solid #E4E0DC;">
+            <th style="text-align:left;padding:8px 12px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#9C9489;">유형</th>
+            <th style="text-align:left;padding:8px 12px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#9C9489;">정의</th>
+            <th style="text-align:left;padding:8px 12px;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#9C9489;">감지 단계</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid #F2EFEC;"><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:#D4692A;">중복</td><td style="padding:9px 12px;color:#57534E;">내용이 거의 동일하여 하나로 합칠 수 있는 요구사항</td><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9C9489;">STAGE 02</td></tr>
+            <tr style="border-bottom:1px solid #F2EFEC;"><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:#D4692A;">통합</td><td style="padding:9px 12px;color:#57534E;">방향이 같아 묶어서 처리 가능한 요구사항</td><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9C9489;">STAGE 02</td></tr>
+            <tr style="border-bottom:1px solid #F2EFEC;"><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:#D4692A;">연결</td><td style="padding:9px 12px;color:#57534E;">서로 다른 화면·담당이지만 연동되는 요구사항</td><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9C9489;">STAGE 02</td></tr>
+            <tr style="border-bottom:1px solid #F2EFEC;"><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:#D4692A;">충돌</td><td style="padding:9px 12px;color:#57534E;">내용이 서로 모순되거나 구현 방향이 상반되는 요구사항</td><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9C9489;">STAGE 03</td></tr>
+            <tr style="border-bottom:1px solid #F2EFEC;"><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:#D4692A;">전제조건</td><td style="padding:9px 12px;color:#57534E;">해당 요구사항 구현 전에 반드시 완료되어야 하는 선행 요구사항</td><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9C9489;">STAGE 03</td></tr>
+            <tr><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-weight:600;color:#D4692A;">유사</td><td style="padding:9px 12px;color:#57534E;">내용이 비슷하지만 범위·대상이 달라 통합 전 검토가 필요한 요구사항</td><td style="padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#9C9489;">STAGE 03</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <script>
