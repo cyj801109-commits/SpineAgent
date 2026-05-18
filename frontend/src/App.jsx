@@ -32,6 +32,8 @@ const App = () => {
     const [uploadedFiles, setUploadedFiles] = useState([]);
 
     const [progressStep, setProgressStep] = useState(0);
+    const [stepElapsed, setStepElapsed] = useState(0);
+    const stepTimerRef = useRef(null);
 
     // Core Data States
     const [metrics, setMetrics] = useState(null);
@@ -55,14 +57,22 @@ const App = () => {
 
     const fileInputRef = useRef(null);
 
+    const startStepTimer = () => {
+        if (stepTimerRef.current) clearInterval(stepTimerRef.current);
+        setStepElapsed(0);
+        stepTimerRef.current = setInterval(() => {
+            setStepElapsed(prev => prev + 1);
+        }, 1000);
+    };
+
     const processingSteps = [
         { title: "데이터 파싱", desc: "텍스트 및 엑셀 데이터 추출 준비" },
         { title: "관계망 구축 준비", desc: "파싱된 데이터 구조화" },
-        { title: "UIUX 관련성 3단계 판단", desc: "원본 요구사항 데이터 추출 중 (API Task 1)" },
+        { title: "UIUX 관련성 3단계 판단", desc: "데이터 아키텍처 제외 + 화면 설계 대상 확정 (API Task 1)" },
         { title: "UIUX 선별 완료", desc: "UIUX 관련/제외 요구사항 분리 완료" },
-        { title: "리소스 최적화 및 모호성 분석", desc: "요구사항 구체화 중 (API Task 2)" },
+        { title: "리소스 최적화 및 모호성 분석", desc: "담당 범위(직접담당·협의필요·인지필요) 분류 + 모호성 구체화 (API Task 2)" },
         { title: "최적화 완료", desc: "표준 양식 매핑 완료" },
-        { title: "정책 충돌 탐지", desc: "상호 배타적 요건 검증 중 (API Task 3)" },
+        { title: "충돌·전제조건·유사 관계 분석", desc: "충돌 감지 + 선행 요구사항 도출 + 유사 항목 그룹핑 (API Task 3)" },
         { title: "검토 지점 설정 완료", desc: "HITL 의사결정 노드 구성 완료" }
     ];
 
@@ -368,7 +378,7 @@ STEP 3. 최종 판단 기준:
   10(코드관리), 11(권한관리), 35(성능), 37(산출물) — 문맥에 맞게 유추 할당`;
 
             // Task 1: 추출 에이전트
-            setProgressStep(2);
+            setProgressStep(2); startStepTimer();
             const schema1 = `{
   "uiux_functional_reqs": [
     { "id": "원본ID", "title": "요구사항명", "detail": "내용", "uiux_relevant": true }
@@ -384,7 +394,7 @@ STEP 3. 최종 판단 기준:
             setProgressStep(3);
 
             // Task 2: 최적화 및 구체화 에이전트
-            setProgressStep(4);
+            setProgressStep(4); startStepTimer();
             const schema2 = `{
   "optimization_summary": {
     "total_input_count": 0,
@@ -438,7 +448,7 @@ STEP 3. 최종 판단 기준:
             // A가 B의 전제조건 → B 구현 전 A 완료 필요. 예: 표준 정의 → 구현 항목들
             // [similar_reqs 판단 기준]
             // 동일 기능명·유사 내용이지만 범위/대상이 달라 통합 여부를 사람이 판단해야 하는 것
-            setProgressStep(6);
+            setProgressStep(6); startStepTimer();
             const schema3 = `{
   "conflicts": [
     {
@@ -485,6 +495,8 @@ STEP 3. 최종 판단 기준:
             setErrorMessage(`[Step ${progressStep + 1} 실패] ${e.message}`);
         } finally {
             setIsAnalyzing(false);
+            if (stepTimerRef.current) clearInterval(stepTimerRef.current);
+            setStepElapsed(0);
         }
     };
 
@@ -679,7 +691,17 @@ STEP 3. 최종 판단 기준:
                                                 {processingSteps.map((step, idx) => (
                                                     <div key={idx} className={`flex items-center gap-4 p-3 rounded transition-all duration-300 ${idx === progressStep ? 'bg-pagebg border border-accent/50 scale-105 transform origin-left' : idx < progressStep ? 'bg-white border border-borderline text-primary opacity-60' : 'text-sub opacity-40'}`}>
                                                         <div className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${idx === progressStep ? 'bg-accent text-white animate-pulse' : 'bg-pagebg border border-borderline'}`}>{idx < progressStep ? <CheckCircle size={14} className="text-accent"/> : idx + 1}</div>
-                                                        <div><p className="text-sm font-bold tracking-tight text-left">{step.title}</p><p className="text-[11px] opacity-80 text-left mt-0.5">{step.desc}</p></div>
+                                                        <div className="flex-1">
+    <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-bold tracking-tight text-left">{step.title}</p>
+        {idx === progressStep && (
+            <span className={`text-[11px] font-mono shrink-0 ${stepElapsed > 90 ? 'text-rose-500 font-bold' : 'text-accent'}`}>
+                {stepElapsed}s{stepElapsed > 90 ? ' ⚠ 응답 지연' : ''}
+            </span>
+        )}
+    </div>
+    <p className="text-[11px] opacity-80 text-left mt-0.5">{step.desc}</p>
+</div>
                                                     </div>
                                                 ))}
                                             </div>
