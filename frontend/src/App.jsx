@@ -552,7 +552,7 @@ STEP 3. 최종 판단 기준:
                     <div className="w-10 h-10 bg-primary rounded flex items-center justify-center text-white"><Layers /></div>
                     <div>
                         <h1 className="text-xl tracking-tight leading-none font-bold">UIUX 요구사항 선별 에이전트</h1>
-                        <p className="text-[10px] text-sub tracking-widest uppercase mt-1 font-bold">RFP에서 UIUX 기획자 관점으로</p>
+                        <p className="text-[10px] text-sub tracking-widest uppercase mt-1 font-bold">UIUX 검토 대상 필터링</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -698,8 +698,8 @@ STEP 3. 최종 판단 기준:
                                     {!isAnalyzing && !metrics && !errorMessage && (
                                         <div className="h-full flex flex-col items-center justify-center text-sub py-40">
                                             <Layers size={48} className="mb-4 text-borderline" />
-                                            <p className="text-lg font-bold tracking-tight text-primary mb-2 uppercase">"RFP에서 UIUX 요구사항만 정확히 선별합니다."</p>
-                                            <p className="text-sm font-normal text-sub max-w-sm text-center">14년 경력의 SI UIUX 기획자 관점으로, 화면 기획에 필요한 요구사항만 골라냅니다.</p>
+                                            <p className="text-lg font-bold tracking-tight text-primary mb-2 uppercase">"요구사항 전체에서 UIUX 담당자의 검토 항목을 추려냅니다."</p>
+                                            <p className="text-sm font-normal text-sub max-w-sm text-center">화면 설계에 영향을 주는 모든 요구사항을 담당 범위별로 분류하여 추출합니다.</p>
                                         </div>
                                     )}
 
