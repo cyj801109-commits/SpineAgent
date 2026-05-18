@@ -272,6 +272,160 @@ const App = () => {
         }
     };
 
+    const PipelineInfoView = () => (
+        <div className="p-8 max-w-4xl mx-auto space-y-10 text-primary">
+            <div>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-accent mb-1 font-mono">SPINE · PIPELINE ARCHITECTURE</p>
+                <h2 className="text-2xl font-bold tracking-tight">UIUX 관련성 판단 기준</h2>
+                <p className="text-sm text-sub mt-1">파이프라인이 요구사항을 어떤 기준으로 선별·분류·분석하는지 정의합니다.</p>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">파이프라인 구성 · 3 STAGE</p>
+                <div className="grid grid-cols-3 gap-4">
+                    {[
+                        { stage: "STAGE 01", title: "UIUX 선별", api: "API Task 1", desc: "전체 요구사항에서 UIUX 검토 대상을 추려냅니다. 3단계 로직으로 포함·제외를 결정합니다.", color: "border-accent" },
+                        { stage: "STAGE 02", title: "최적화·구체화", api: "API Task 2", desc: "선별된 항목의 담당 범위를 분류하고, 모호 표현을 정량 기준으로 구체화합니다.", color: "border-blue-400" },
+                        { stage: "STAGE 03", title: "관계 분석", api: "API Task 3", desc: "충돌·전제조건·유사 관계를 감지하고 HITL 의사결정 포인트를 설정합니다.", color: "border-rose-400" },
+                    ].map((s, i) => (
+                        <div key={i} className={`bg-white border-t-4 ${s.color} border border-borderline rounded-lg p-4 shadow-sm`}>
+                            <p className="text-[10px] font-mono font-bold text-sub uppercase tracking-widest">{s.stage} · {s.api}</p>
+                            <p className="text-base font-bold mt-1 mb-2">{s.title}</p>
+                            <p className="text-xs text-sub leading-relaxed">{s.desc}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">UIUX 관련성 판단 · 3단계 로직</p>
+                <div className="space-y-3">
+                    {[
+                        {
+                            step: "STEP 1", label: "Out of Scope 제외",
+                            color: "bg-rose-50 border-rose-200", badge: "bg-rose-100 text-rose-700",
+                            items: [
+                                { tag: "PM 영역", desc: "디자인시스템 정의, WBS, 일정, 예산" },
+                                { tag: "컴플라이언스", desc: "개인정보처리방침, 보안정책" },
+                                { tag: "인프라", desc: "서버 튜닝, 수수료 계산, 배치" },
+                                { tag: "데이터 아키텍처", desc: "DB 설계, 데이터 표준화·모델링·스키마·메타 정의, ETL, 데이터 수집·연계·마이그레이션·품질검증" },
+                            ],
+                            note: "※ 위 항목이라도 '화면에서 어떻게 보여줄지(시각화 방식, 컴포넌트 구조)'를 포함하면 STEP 2에서 복구 가능"
+                        },
+                        {
+                            step: "STEP 2", label: "Context Recovery",
+                            color: "bg-amber-50 border-amber-200", badge: "bg-amber-100 text-amber-700",
+                            items: [
+                                { tag: "복구 키워드", desc: "화면, 조회UI, 노출, 버튼, 클릭, 팝업, 모달, 입력폼, 레이아웃, 시각화 방식, 컴포넌트 구조" },
+                            ],
+                            note: "STEP 1 제외 항목이 복구 키워드를 포함하면 'Conditional'로 분류 후 STEP 3 재판단"
+                        },
+                        {
+                            step: "STEP 3", label: "최종 판단",
+                            color: "bg-green-50 border-green-200", badge: "bg-green-100 text-green-700",
+                            items: [
+                                { tag: "포함 ✓", desc: "UIUX 기획자가 화면 설계서(와이어프레임·스토리보드)를 직접 작성해야 하는 항목" },
+                                { tag: "제외 ✗", desc: "데이터 설계서·아키텍처 문서·API 명세서가 산출물인 항목" },
+                                { tag: "협의필요", desc: "화면 설계와 데이터 설계가 혼재된 항목 → review_role: 협의필요로 포함" },
+                            ],
+                            note: null
+                        },
+                    ].map((s, i) => (
+                        <div key={i} className={`border rounded-lg p-5 ${s.color}`}>
+                            <div className="flex items-center gap-3 mb-3">
+                                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${s.badge}`}>{s.step}</span>
+                                <span className="text-sm font-bold">{s.label}</span>
+                            </div>
+                            <div className="space-y-1.5">
+                                {s.items.map((item, j) => (
+                                    <div key={j} className="flex gap-3 text-xs">
+                                        <span className="font-bold shrink-0 w-28">{item.tag}</span>
+                                        <span className="text-sub">{item.desc}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            {s.note && <p className="text-[11px] text-sub mt-3 italic border-t border-current/10 pt-2">{s.note}</p>}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">담당 범위 분류 · review_role</p>
+                <div className="grid grid-cols-3 gap-3">
+                    {[
+                        { role: "직접담당", color: "bg-accent text-white", desc: "업무분류가 UI/UX이거나 UIUX 기획자가 화면 설계서를 직접 작성하는 항목" },
+                        { role: "협의필요", color: "bg-amber-500 text-white", desc: "다른 팀 주담당이지만 화면 영향도가 있어 UIUX 검토가 필요한 항목" },
+                        { role: "인지필요", color: "bg-slate-400 text-white", desc: "화면 직접 관련은 없으나 성능·접근성 기준 등 UIUX가 알아야 할 항목" },
+                    ].map((r, i) => (
+                        <div key={i} className="bg-white border border-borderline rounded-lg p-4 shadow-sm">
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded font-mono ${r.color}`}>{r.role}</span>
+                            <p className="text-xs text-sub mt-2 leading-relaxed">{r.desc}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">요구사항 관계 유형 · relation_type</p>
+                <div className="bg-white border border-borderline rounded-lg overflow-hidden shadow-sm">
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="bg-pagebg border-b border-borderline">
+                                <th className="p-3 text-left font-bold w-28">유형</th>
+                                <th className="p-3 text-left font-bold">정의</th>
+                                <th className="p-3 text-left font-bold w-24">감지 단계</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-borderline">
+                            {[
+                                { type: "중복", def: "내용이 거의 동일하여 하나로 합칠 수 있는 요구사항", stage: "STAGE 02" },
+                                { type: "통합", def: "방향이 같아 묶어서 처리 가능한 요구사항", stage: "STAGE 02" },
+                                { type: "연결", def: "서로 다른 화면·담당이지만 연동되는 요구사항", stage: "STAGE 02" },
+                                { type: "충돌", def: "내용이 서로 모순되거나 구현 방향이 상반되는 요구사항", stage: "STAGE 03" },
+                                { type: "전제조건", def: "해당 요구사항 구현 전에 반드시 완료되어야 하는 선행 요구사항", stage: "STAGE 03" },
+                                { type: "유사", def: "내용이 비슷하지만 범위·대상이 달라 통합 전 검토가 필요한 요구사항", stage: "STAGE 03" },
+                            ].map((r, i) => (
+                                <tr key={i} className="hover:bg-pagebg">
+                                    <td className="p-3 font-mono font-bold text-accent">{r.type}</td>
+                                    <td className="p-3 text-sub">{r.def}</td>
+                                    <td className="p-3 font-mono text-[10px] text-sub">{r.stage}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">모호 표현 구체화 기준</p>
+                <div className="bg-white border border-borderline rounded-lg overflow-hidden shadow-sm">
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="bg-pagebg border-b border-borderline">
+                                <th className="p-3 text-left font-bold">모호 표현</th>
+                                <th className="p-3 text-left font-bold">구체화 기준</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-borderline">
+                            {[
+                                { vague: "직관적인 UI", concrete: "3클릭 이내 목표 달성 구조" },
+                                { vague: "사용자 편의성 고려", concrete: "접근성 WCAG 2.1 AA 준수" },
+                                { vague: "최적화된 폼", concrete: "입력 필드 자동완성, 실시간 유효성 검사" },
+                                { vague: "빠른 응답", concrete: "API P95 응답 3초 이내" },
+                            ].map((r, i) => (
+                                <tr key={i} className="hover:bg-pagebg">
+                                    <td className="p-3 text-sub line-through opacity-60">{r.vague}</td>
+                                    <td className="p-3 font-bold text-primary">{r.concrete}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+
     const analyzeLogic = async () => {
         setIsAnalyzing(true);
         setErrorMessage(null);
@@ -659,14 +813,17 @@ STEP 3. 최종 판단 기준:
                     <div className="flex flex-col flex-1 min-h-[400px] relative w-full min-w-0">
                         {!isAnalyzing && metrics && !errorMessage && (
                             <div className="flex gap-0 px-2 shrink-0 overflow-x-auto text-primary z-20 relative">
-                                {['UIUX 선별', '제외 항목', '요구사항정의서', '충돌'].map(tab => (
+                                {['UIUX 선별', '제외 항목', '요구사항정의서', '충돌', '파이프라인'].map(tab => {
+                                    const count = tab === 'UIUX 선별' ? rawFunc.length : tab === '제외 항목' ? rawNonFunc.length : tab === '요구사항정의서' ? optimizedReqs.length : tab === '충돌' ? conflicts.length : null;
+                                    return (
                                     <button key={tab}
                                             onClick={() => setActiveTab(tab)}
                                             className={`tab-btn px-6 py-3 rounded-t text-xs flex items-center gap-2 ${activeTab === tab ? (tab === '충돌' ? 'tab-conflict-active' : 'tab-active') : 'tab-inactive'}`}>
                                         {tab}
-                                        <span className="bg-pagebg px-2 py-0.5 rounded-full text-[10px] text-primary border border-borderline font-bold">{tab === 'UIUX 선별' ? rawFunc.length : tab === '제외 항목' ? rawNonFunc.length : tab === '요구사항정의서' ? optimizedReqs.length : conflicts.length}</span>
+                                        {count !== null && <span className="bg-pagebg px-2 py-0.5 rounded-full text-[10px] text-primary border border-borderline font-bold">{count}</span>}
                                     </button>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
 
@@ -768,6 +925,8 @@ STEP 3. 최종 판단 기준:
                                     )}
 
                                     {!isAnalyzing && !errorMessage && activeTab === '충돌' && conflicts.length > 0 && renderConflictsTable()}
+
+                                    {activeTab === '파이프라인' && <PipelineInfoView />}
                                 </div>
                             </div>
                         </div>
@@ -913,7 +1072,7 @@ STEP 3. 최종 판단 기준:
                                 </div>
                             </div>
                             <div className="flex gap-0 relative z-20">
-                                {['UIUX 선별', '제외 항목', '요구사항정의서', '충돌'].map(tab => (
+                                {['UIUX 선별', '제외 항목', '요구사항정의서', '충돌', '파이프라인'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-btn px-8 py-3 rounded-t text-sm font-bold transition-all ${activeTab === tab ? (tab === '충돌' ? 'tab-conflict-active' : 'tab-active') : 'tab-inactive'}`}>{tab}</button>
                                 ))}
                             </div>
@@ -969,9 +1128,13 @@ STEP 3. 최종 판단 기준:
                                     </tbody>
                                 </table>
                             ) : (
+                                activeTab === '파이프라인' ? (
+                                <PipelineInfoView />
+                            ) : (
                                 <div className="rounded border border-borderline shadow-sm bg-white">
                                     {activeTab === '충돌' ? renderConflictsTable() : renderRawTable(activeTab === 'UIUX 선별' ? rawFunc : rawNonFunc)}
                                 </div>
+                            )
                             )}
                         </div>
                     </div>
