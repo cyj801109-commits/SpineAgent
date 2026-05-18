@@ -266,7 +266,7 @@ const App = () => {
                 }
                 if (retries === 0) {
                     if (error.message === "MAX_TOKENS_REACHED" || error.message.includes("JSON 파싱 실패")) {
-                        throw new Error("[출력 한도 초과] 분석할 데이터가 너무 많아 AI 응답이 중간에 끊겼습니다. 요구사항을 15~20개씩 나누어서 가동해 주세요.");
+                        throw new Error("[출력 한도 초과] AI 응답이 중간에 끊겼습니다. 자동 재시도에 실패했습니다. 입력 데이터를 줄여서 다시 시도해 주세요.");
                     }
                     const msg = error.message.toLowerCase();
                     if (msg.includes("quota") || msg.includes("429")) throw new Error("[API 할당량 초과] 제공량이 소진되었습니다.");
@@ -537,7 +537,7 @@ STEP 3. 최종 판단 기준:
   06(프로젝트수정), 07(프로젝트정보), 08(게시판), 09(Help/산출물),
   10(코드관리), 11(권한관리), 35(성능), 37(산출물) — 문맥에 맞게 유추 할당`;
 
-            // Task 1: 추출 에이전트
+            // Task 1: 추출 에이전트 (자동 청킹)
             setProgressStep(2); startStepTimer();
             const schema1 = `{
   "uiux_functional_reqs": [
@@ -548,9 +548,44 @@ STEP 3. 최종 판단 기준:
   ]
 }`;
 
-            const extractedData = await callBackendAPI(combinedText, coreSystemPrompt, schema1, pdfFilesB64);
-            setRawFunc(extractedData.uiux_functional_reqs || []);
-            setRawNonFunc(extractedData.excluded_reqs || []);
+            const CHUNK_SIZE = 15000; // 약 15~20개 요구사항 분량
+            const mergedFunc = [];
+            const mergedExcluded = [];
+
+            if (pdfFilesB64.length > 0) {
+                // PDF는 청킹 불가 — 단일 호출
+                const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1, pdfFilesB64);
+                mergedFunc.push(...(result.uiux_functional_reqs || []));
+                mergedExcluded.push(...(result.excluded_reqs || []));
+            } else if (combinedText.length <= CHUNK_SIZE) {
+                const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1);
+                mergedFunc.push(...(result.uiux_functional_reqs || []));
+                mergedExcluded.push(...(result.excluded_reqs || []));
+            } else {
+                // 줄 단위로 청크 분할
+                const lines = combinedText.split('\n');
+                const chunks = [];
+                let current = '';
+                for (const line of lines) {
+                    if (current.length + line.length + 1 > CHUNK_SIZE && current.length > 0) {
+                        chunks.push(current);
+                        current = '';
+                    }
+                    current += (current ? '\n' : '') + line;
+                }
+                if (current) chunks.push(current);
+
+                for (let i = 0; i < chunks.length; i++) {
+                    const chunkPrompt = `[청크 ${i + 1}/${chunks.length}] 아래는 전체 요구사항 중 일부입니다. 이 부분만 분석하세요.\n\n${chunks[i]}`;
+                    const result = await callBackendAPI(chunkPrompt, coreSystemPrompt, schema1);
+                    mergedFunc.push(...(result.uiux_functional_reqs || []));
+                    mergedExcluded.push(...(result.excluded_reqs || []));
+                }
+            }
+
+            const extractedData = { uiux_functional_reqs: mergedFunc, excluded_reqs: mergedExcluded };
+            setRawFunc(mergedFunc);
+            setRawNonFunc(mergedExcluded);
             setProgressStep(3);
 
             // Task 2: 최적화 및 구체화 에이전트
