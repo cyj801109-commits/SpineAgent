@@ -223,6 +223,8 @@ const App = () => {
         let delay = 2000;
         while (retries > 0) {
             try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 120000);
                 const response = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -232,8 +234,9 @@ const App = () => {
                         systemInstruction: systemInstruction,
                         schema: schemaDefinition,
                         pdf_files: pdfFiles
-                    })
-                });
+                    }),
+                    signal: controller.signal
+                }).finally(() => clearTimeout(timeoutId));
 
                 if (!response.ok) {
                     const err = await response.json().catch(() => ({}));
@@ -258,6 +261,9 @@ const App = () => {
                 }
             } catch (error) {
                 retries--;
+                if (error.name === 'AbortError') {
+                    throw new Error("[응답 시간 초과] AI 처리가 120초를 초과했습니다. 요구사항을 줄여서 다시 시도해 주세요.");
+                }
                 if (retries === 0) {
                     if (error.message === "MAX_TOKENS_REACHED" || error.message.includes("JSON 파싱 실패")) {
                         throw new Error("[출력 한도 초과] 분석할 데이터가 너무 많아 AI 응답이 중간에 끊겼습니다. 요구사항을 15~20개씩 나누어서 가동해 주세요.");

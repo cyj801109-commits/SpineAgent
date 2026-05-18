@@ -77,6 +77,7 @@ async def analyze(req: AnalyzeRequest):
                 top_k=40,
                 max_output_tokens=65536,
             ),
+            request_options={"timeout": 110},
         )
         text = response.text
         match = re.search(r'\{.*\}', text, re.DOTALL)
