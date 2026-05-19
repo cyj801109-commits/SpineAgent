@@ -223,8 +223,6 @@ const App = () => {
         let delay = 2000;
         while (retries > 0) {
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 120000);
                 const response = await fetch('/api/analyze', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -234,18 +232,43 @@ const App = () => {
                         systemInstruction: systemInstruction,
                         schema: schemaDefinition,
                         pdf_files: pdfFiles
-                    }),
-                    signal: controller.signal
-                }).finally(() => clearTimeout(timeoutId));
+                    })
+                });
 
                 if (!response.ok) {
                     const err = await response.json().catch(() => ({}));
                     throw new Error(err.detail || "API 통신 오류");
                 }
 
-                const data = await response.json();
-                const text = data.text;
+                // SSE 스트리밍 수신
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulated = '';
+                let buffer = '';
 
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        const payload = line.slice(6);
+                        if (payload === '[DONE]') break;
+                        try {
+                            const evt = JSON.parse(payload);
+                            if (evt.error) throw new Error(evt.error);
+                            if (evt.token) accumulated += evt.token;
+                        } catch (e) {
+                            if (e.message && !e.message.startsWith('Unexpected')) throw e;
+                        }
+                    }
+                }
+
+                const text = accumulated;
                 const firstBrace = text.indexOf('{');
                 const lastBrace = text.lastIndexOf('}');
 
@@ -261,12 +284,9 @@ const App = () => {
                 }
             } catch (error) {
                 retries--;
-                if (error.name === 'AbortError') {
-                    throw new Error("[응답 시간 초과] AI 처리가 120초를 초과했습니다. 요구사항을 줄여서 다시 시도해 주세요.");
-                }
                 if (retries === 0) {
                     if (error.message === "MAX_TOKENS_REACHED" || error.message.includes("JSON 파싱 실패")) {
-                        throw new Error("[출력 한도 초과] AI 응답이 중간에 끊겼습니다. 자동 재시도에 실패했습니다. 입력 데이터를 줄여서 다시 시도해 주세요.");
+                        throw new Error("[출력 한도 초과] AI 응답이 중간에 끊겼습니다. 입력 데이터를 줄여서 다시 시도해 주세요.");
                     }
                     const msg = error.message.toLowerCase();
                     if (msg.includes("quota") || msg.includes("429")) throw new Error("[API 할당량 초과] 제공량이 소진되었습니다.");

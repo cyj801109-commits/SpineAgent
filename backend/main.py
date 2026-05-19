@@ -1,11 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig, Part
-import base64, json, re, os, tempfile, asyncio
+import base64, json, os, tempfile, asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from pathlib import Path
@@ -31,6 +31,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_executor = ThreadPoolExecutor(max_workers=4)
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -48,59 +50,69 @@ class AnalyzeRequest(BaseModel):
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
-    try:
-        full_prompt = (
-            f"{req.prompt}\n\n"
-            f"위 데이터를 분석하여 아래 JSON 스키마 구조로만 정확하게 출력하라. "
-            f"마크다운 백틱(```) 없이 순수 JSON 객체만 반환하라.\n{req.schema}"
-        )
-        model = GenerativeModel(
-            req.model,
-            system_instruction=req.systemInstruction,
-        )
+    full_prompt = (
+        f"{req.prompt}\n\n"
+        f"위 데이터를 분석하여 아래 JSON 스키마 구조로만 정확하게 출력하라. "
+        f"마크다운 백틱(```) 없이 순수 JSON 객체만 반환하라.\n{req.schema}"
+    )
+    model = GenerativeModel(
+        req.model,
+        system_instruction=req.systemInstruction,
+    )
 
-        # content parts 구성: PDF 바이너리 + 텍스트 프롬프트
-        content_parts = []
-        if req.pdf_files:
-            for pdf in req.pdf_files:
-                pdf_bytes = base64.b64decode(pdf.data)
-                content_parts.append(
-                    Part.from_data(data=pdf_bytes, mime_type="application/pdf")
-                )
-        content_parts.append(full_prompt)
+    content_parts = []
+    if req.pdf_files:
+        for pdf in req.pdf_files:
+            pdf_bytes = base64.b64decode(pdf.data)
+            content_parts.append(
+                Part.from_data(data=pdf_bytes, mime_type="application/pdf")
+            )
+    content_parts.append(full_prompt)
 
-        _executor = ThreadPoolExecutor(max_workers=1)
-        loop = asyncio.get_event_loop()
-        response = await asyncio.wait_for(
-            loop.run_in_executor(
+    gen_config = GenerationConfig(
+        response_mime_type="application/json",
+        temperature=0.2,
+        top_p=0.6,
+        top_k=40,
+        max_output_tokens=65536,
+    )
+
+    async def stream_generator():
+        try:
+            loop = asyncio.get_event_loop()
+            # generate_content_stream()은 동기 — 이터레이터 생성만 executor에서 실행
+            stream = await loop.run_in_executor(
                 _executor,
                 lambda: model.generate_content(
                     content_parts,
-                    generation_config=GenerationConfig(
-                        response_mime_type="application/json",
-                        temperature=0.2,
-                        top_p=0.6,
-                        top_k=40,
-                        max_output_tokens=65536,
-                    ),
+                    generation_config=gen_config,
+                    stream=True,
                 ),
-            ),
-            timeout=110,
-        )
-        text = response.text
-        match = re.search(r'\{.*\}', text, re.DOTALL)
-        if not match:
-            raise HTTPException(
-                status_code=500,
-                detail="AI 응답에서 JSON을 찾지 못했습니다.",
             )
-        return {"text": match.group(0)}
-    except HTTPException:
-        raise
-    except asyncio.TimeoutError:
-        raise HTTPException(status_code=504, detail="AI 응답 시간이 110초를 초과했습니다.")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            # 동기 이터레이터를 비동기로 소비
+            def read_chunks():
+                chunks = []
+                for chunk in stream:
+                    if chunk.text:
+                        chunks.append(chunk.text)
+                return chunks
+
+            chunks = await loop.run_in_executor(_executor, read_chunks)
+            for text in chunks:
+                yield f"data: {json.dumps({'token': text}, ensure_ascii=False)}\n\n"
+
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        stream_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 # --- 프론트엔드 정적 파일 서빙 ---
 static_dir = Path(__file__).resolve().parent / "static"
