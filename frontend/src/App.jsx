@@ -58,6 +58,9 @@ const App = () => {
     const [customOptionText, setCustomOptionText] = useState('');
 
     const fileInputRef = useRef(null);
+    const [showAmbiguityModal, setShowAmbiguityModal] = useState(false);
+
+    const stepLabel = (v) => ({ 'STEP1통과': '직접 해당', 'STEP2복구': '간접 포함', 'STEP3확정': '심사 확정' }[v] || v || '-');
 
     const startStepTimer = () => {
         if (stepTimerRef.current) clearInterval(stepTimerRef.current);
@@ -896,7 +899,7 @@ STEP 3. 최종 판단 기준:
                                     <p className="text-[11px] font-bold uppercase text-sub mb-1">UIUX 선별</p>
                                     <p className="text-3xl font-bold text-accent">{metrics.uiux_selected_count}<span className="text-sm ml-1 font-bold text-sub">/{metrics.total_input_count}</span></p>
                                 </div>
-                                <div className="bg-white rounded-lg p-5 border border-borderline shadow-sm flex flex-col justify-center">
+                                <div className="bg-white rounded-lg p-5 border border-borderline shadow-sm flex flex-col justify-center cursor-pointer hover:border-accent transition-colors" onClick={() => setShowAmbiguityModal(true)}>
                                     <p className="text-[11px] font-bold text-sub mb-1">모호성 보정</p>
                                     <p className="text-3xl font-bold text-primary">{metrics.ambiguity_resolved_count}<span className="text-sm ml-1 font-bold text-sub">건</span></p>
                                 </div>
@@ -1008,7 +1011,7 @@ STEP 3. 최종 판단 기준:
                                                         <td className="p-4 font-bold text-primary tracking-wider border-r border-borderline">{r.요구사항ID}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{r.fo_bo || 'TBD'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{r.화면본수 || 'TBD'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline text-[10px]">{r.uiux_relevance_step || '-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline text-[10px]">{stepLabel(r.uiux_relevance_step)}</td>
                                                         <td className="p-4 text-sub border-r border-borderline text-[10px]">{r.review_role || '-'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{r.업무분류}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{r.업무_대}</td>
@@ -1273,7 +1276,7 @@ STEP 3. 최종 판단 기준:
                                                 <td className="p-4 font-bold text-primary border-r border-borderline tracking-wider">{r.요구사항ID}</td>
                                                 <td className="p-4 border-r border-borderline">{r.fo_bo || 'TBD'}</td>
                                                 <td className="p-4 border-r border-borderline">{r.화면본수 || 'TBD'}</td>
-                                                <td className="p-4 border-r border-borderline text-[10px] text-sub">{r.uiux_relevance_step || '-'}</td>
+                                                <td className="p-4 border-r border-borderline text-[10px] text-sub">{stepLabel(r.uiux_relevance_step)}</td>
                                                 <td className="p-4 border-r border-borderline text-[10px] text-sub">{r.review_role || '-'}</td>
                                                 <td className="p-4 border-r border-borderline">{r.업무분류}</td>
                                                 <td className="p-4 border-r border-borderline">{r.업무_대}</td>
@@ -1302,6 +1305,57 @@ STEP 3. 최종 판단 기준:
                                     {activeTab === '충돌' ? renderConflictsTable() : renderRawTable(activeTab === 'UIUX 선별' ? rawFunc : rawNonFunc, activeTab === '제외 항목')}
                                 </div>
                             )
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- Ambiguity Summary Modal --- */}
+            {showAmbiguityModal && (
+                <div className="fixed inset-0 z-[90] flex items-center justify-center bg-primary/40 backdrop-blur-sm p-6 animate-in fade-in duration-200" onClick={() => setShowAmbiguityModal(false)}>
+                    <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl flex flex-col max-h-[90vh] animate-in zoom-in-95 border border-borderline" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center p-6 border-b border-borderline bg-white rounded-t-lg shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-white p-2 rounded text-accent border border-borderline"><AlertTriangle size={20}/></div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-primary uppercase leading-tight">모호성 보정 목록</h3>
+                                    <p className="text-[11px] text-sub font-bold uppercase mt-1 tracking-widest">{optimizedReqs.filter(r => r.ambiguity_hitl?.is_ambiguous).length}건</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowAmbiguityModal(false)} className="p-2 bg-white hover:bg-pagebg rounded border border-borderline transition-all text-primary active:scale-90"><X size={16}/></button>
+                        </div>
+                        <div className="p-6 overflow-y-auto space-y-4">
+                            {optimizedReqs.filter(r => r.ambiguity_hitl?.is_ambiguous).map((r, i) => (
+                                <div key={i} className="border border-borderline rounded-lg p-5 hover:border-accent transition-colors">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="font-mono text-xs font-bold text-accent">{r.요구사항ID}</span>
+                                        <span className="text-sm font-bold text-primary">{r.요구정의명}</span>
+                                    </div>
+                                    {r.ambiguity_hitl.original_text && (
+                                        <div className="bg-pagebg border border-borderline p-3 rounded mb-2">
+                                            <span className="text-[10px] font-bold text-sub uppercase tracking-wide">원문</span>
+                                            <p className="text-xs text-primary mt-1 leading-relaxed">{r.ambiguity_hitl.original_text}</p>
+                                        </div>
+                                    )}
+                                    <div className="mb-2">
+                                        <span className="text-[10px] font-bold text-sub uppercase tracking-wide">모호 사유</span>
+                                        <p className="text-xs text-primary mt-1 leading-relaxed">{r.ambiguity_hitl.ambiguity_reason}</p>
+                                    </div>
+                                    {r.ambiguity_hitl.suggested_options?.length > 0 && (
+                                        <div>
+                                            <span className="text-[10px] font-bold text-sub uppercase tracking-wide">개선 대안</span>
+                                            <div className="mt-1 space-y-1">
+                                                {r.ambiguity_hitl.suggested_options.map((opt, j) => (
+                                                    <div key={j} className="text-xs text-primary bg-pagebg border border-borderline rounded px-3 py-2">{opt}</div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                            {optimizedReqs.filter(r => r.ambiguity_hitl?.is_ambiguous).length === 0 && (
+                                <div className="text-center text-sub py-8">모호성 보정 대상 항목이 없습니다.</div>
                             )}
                         </div>
                     </div>
