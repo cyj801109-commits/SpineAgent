@@ -287,33 +287,38 @@ const App = () => {
 
     const exportToExcel = () => {
         const wb = XLSX.utils.book_new();
-        // ① UIUX 선별 시트
+        const mergedRaw = [
+            ...rawFunc.map(r => ({...r, type:'기능'})),
+            ...rawNonFunc.map(r => ({...r, type:'비기능'}))
+        ];
         if (mergedRaw.length) {
-            const ws1 = XLSX.utils.json_to_sheet(mergedRaw.map(r => {
-                const m = findOptMatch(r.id);
-                return {'원본ID':r.id,'유형':r.type,'요구사항명':r.title,'상세내용':r.detail,'업무분류':m?.업무분류||'','업무_대':m?.업무_대||'','기능_중':m?.기능_중||'','구성_소':m?.구성_소||'','요구정의명':m?.요구정의명||'','상세내용(구체화)':m?.고객_요구사항_상세_내용||'','제약사항':m?.제약사항||'','발생일':m?.요건_발생일||'','분류/유형':m?`${m.요구사항유형분류?.분류||''}/${m.요구사항유형분류?.유형||''}`:'','우선순위':m?.우선순위||''};
+            const ws = XLSX.utils.json_to_sheet(mergedRaw.map(raw => {
+                const matched = optimizedReqs.find(opt =>
+                    opt.related_reqs?.some(rel => rel.target_id === raw.id)
+                );
+                return {
+                    '원본ID': raw.id,
+                    '유형': raw.type,
+                    '요구사항명': raw.title,
+                    '상세내용': raw.detail,
+                    '업무분류': matched?.업무분류||'',
+                    '업무_대': matched?.업무_대||'',
+                    '기능_중': matched?.기능_중||'',
+                    '구성_소': matched?.구성_소||'',
+                    '요구정의명': matched?.요구정의명||'',
+                    '상세내용(구체화)': matched?.고객_요구사항_상세_내용||'',
+                    '연관요구사항': matched?.related_reqs?.map(r=>r.target_id).join(', ')||'',
+                    '제약사항': matched?.제약사항||'',
+                    '발생일': matched?.요건_발생일||'',
+                    '분류/유형': matched ? `${matched.요구사항유형분류?.분류||''}/${matched.요구사항유형분류?.유형||''}` : '',
+                    '우선순위': matched?.우선순위||'',
+                };
             }));
-            XLSX.utils.book_append_sheet(wb, ws1, 'UIUX 선별');
+            XLSX.utils.book_append_sheet(wb, ws, 'UIUX 선별');
         }
-        // ② 선별결과 시트
-        if (optimizedReqs.length) {
-            const ws2 = XLSX.utils.json_to_sheet(optimizedReqs.map(r => ({
-                'NO':r.NO,'업무분류':r.업무분류,'업무_대':r.업무_대,'기능_중':r.기능_중,'구성_소':r.구성_소,
-                '요구정의명':r.요구정의명,'상세내용(구체화)':r.고객_요구사항_상세_내용,
-                '연관요구사항':r.related_reqs?.map(rel=>`[${rel.relation_type}] ${rel.target_id}`).join(', ')||'',
-                '제약사항':r.제약사항||'','발생일':r.요건_발생일||'',
-                '분류/유형':`${r.요구사항유형분류?.분류||''}/${r.요구사항유형분류?.유형||''}`,'우선순위':r.우선순위||'',
-            })));
-            XLSX.utils.book_append_sheet(wb, ws2, '선별결과');
-        }
-        // ③ 충돌 시트
-        if (conflicts.length) {
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conflicts.map(c => ({'충돌ID':c.conflict_id,'관련ID':c.involved_req_ids.join(', '),'충돌사유':c.conflict_reason}))), '충돌');
-        }
-        // ④ 파이프라인 시트
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(processingSteps.map((s,i) => ({'단계':i+1,'처리명':s.title,'설명':s.desc,'상태':metrics?'완료':'대기'}))), '파이프라인');
+        if (conflicts.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conflicts.map(c => ({'충돌ID': c.conflict_id, '관련ID': c.involved_req_ids.join(', '), '충돌사유': c.conflict_reason}))), '충돌');
         if (!wb.SheetNames.length) { alert('내보낼 데이터가 없습니다.'); return; }
-        XLSX.writeFile(wb, '선별결과_SPINE.xlsx');
+        XLSX.writeFile(wb, 'UIUX선별_SPINE.xlsx');
     };
 
     const handleHitlDecision = (item, selectedOption, hitlType) => {
@@ -426,7 +431,7 @@ const App = () => {
             setConflicts(conflictData.conflicts || []);
             if (optimized.optimization_summary) setMetrics({ ...optimized.optimization_summary, conflict_req_count: conflictData.conflicts?.length || 0 });
             setProgressStep(7);
-            setActiveTab('선별결과');
+            setActiveTab('UIUX 선별');
         } catch (e) {
             setErrorMessage(e.message);
         } finally {
@@ -488,68 +493,9 @@ const App = () => {
         </table>
     );
 
-    const MergedRawTable = () => (
-        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:1800}}>
-            <thead style={{position:'sticky',top:0,background:'#F2EFEC',zIndex:10}}>
-                <tr>{['원본ID','유형','요구사항명','상세내용','업무분류','업무_대','기능_중','구성_소','요구정의명','상세내용(구체화)','연관요구사항','제약사항','발생일','분류/유형','우선순위'].map(h => (
-                    <th key={h} style={{padding:'11px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.06em',borderBottom:'2px solid #E4E0DC',whiteSpace:'nowrap'}}>{h}</th>
-                ))}</tr>
-            </thead>
-            <tbody>
-                {mergedRaw.map((r,i) => {
-                    const m = findOptMatch(r.id);
-                    return (
-                        <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}}>
-                            <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',fontWeight:600,fontSize:11,color:'#D4692A',whiteSpace:'nowrap'}}>{r.id}</td>
-                            <td style={{padding:'10px 14px'}}><span className={`badge ${r.type==='기능'?'badge-rel':'badge-dup'}`}>{r.type}</span></td>
-                            <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',minWidth:160}}>{r.title}</td>
-                            <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6,minWidth:200}}>{r.detail}</td>
-                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.업무분류||'-'}</td>
-                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.업무_대||'-'}</td>
-                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.기능_중||'-'}</td>
-                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.구성_소||'-'}</td>
-                            <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',minWidth:160}}>{m?.요구정의명||'-'}</td>
-                            <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6,minWidth:240}}>{m?.고객_요구사항_상세_내용||'-'}</td>
-                            <td style={{padding:'10px 14px',minWidth:140}}><div style={{display:'flex',flexWrap:'wrap',gap:3}}>{m?.related_reqs?.map((rel,j) => <RelBadge key={j} rel={rel}/>) || '-'}</div></td>
-                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.제약사항||'-'}</td>
-                            <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',color:'#9C9489',fontSize:10,whiteSpace:'nowrap'}}>{m?.요건_발생일||'-'}</td>
-                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{m ? `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}` : '-'}</td>
-                            <td style={{padding:'10px 14px',whiteSpace:'nowrap'}}>{m ? <span className={`priority-${m.우선순위}`}>{m.우선순위}</span> : '-'}</td>
-                        </tr>
-                    );
-                })}
-            </tbody>
-        </table>
-    );
-
-    const PipelineTab = () => (
-        <div style={{maxWidth:560,margin:'20px auto'}}>
-            <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                {processingSteps.map((step, idx) => {
-                    const isDone = !!metrics;
-                    return (
-                        <div key={idx} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderRadius:10,background:isDone?'#FAFAF8':'transparent',border:`1px solid ${isDone?'#E4E0DC':'#F2EFEC'}`,transition:'all 0.3s'}}>
-                            <div className={`step-dot ${isDone?'step-done':'step-pending'}`}>
-                                {isDone ? <Check size={12}/> : idx + 1}
-                            </div>
-                            <div style={{flex:1}}>
-                                <div style={{fontSize:13,fontWeight:600,color:isDone?'#292524':'#C0C5D0'}}>{step.title}</div>
-                                <div style={{fontSize:11,color:isDone?'#57534E':'#C0C5D0',marginTop:1}}>{step.desc}</div>
-                            </div>
-                            <span style={{fontSize:10,fontWeight:700,fontFamily:'IBM Plex Mono',color:isDone?'#2D8A5E':'#C8BFB8',textTransform:'uppercase'}}>{isDone?'완료':'대기'}</span>
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-
     const hasResults = metrics && !isAnalyzing && !errorMessage;
-    const tabs = ['UIUX 선별','선별결과','충돌','파이프라인'];
-    const tabCounts = {'UIUX 선별':rawFunc.length+rawNonFunc.length,'선별결과':optimizedReqs.length,'충돌':conflicts.length,'파이프라인':processingSteps.length};
-
-    const mergedRaw = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
-    const findOptMatch = (origId) => optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === origId));
+    const tabs = ['UIUX 선별','충돌'];
+    const tabCounts = {'UIUX 선별': rawFunc.length + rawNonFunc.length, '충돌': conflicts.length};
     const handleTabChange = (t) => { setActiveTab(t); setReqSubTab('전체'); };
 
     /* ───── Detail Modal ───── */
@@ -690,12 +636,12 @@ const App = () => {
                                         marginTop: 8,
                                     }}>
                                     {t}
-                                    {t !== '파이프라인' && <span style={{
+                                    <span style={{
                                         background: isActive ? 'rgba(255,255,255,0.2)' : '#F2EFEC',
                                         color: isActive ? 'white' : '#9C9489',
                                         padding:'2px 8px', borderRadius:20,
                                         fontSize:12, fontWeight:700,
-                                    }}>{tabCounts[t]}</span>}
+                                    }}>{tabCounts[t]}</span>
                                 </button>
                             );
                         })}
@@ -734,35 +680,48 @@ const App = () => {
                 {/* ── 테이블 (좌우 스크롤 포함) ── */}
                 <div style={{flex:1,overflow:'auto',padding:16}}>
                     <div style={{background:'white',borderRadius:10,border:'1px solid #E4E0DC',overflow:'auto',minWidth:'100%'}}>
-                        {activeTab==='UIUX 선별' ? <MergedRawTable/>
-                        : activeTab==='선별결과' ? (
+                        {activeTab==='UIUX 선별' ? (() => {
+                            const mergedRaw = [
+                                ...rawFunc.map(r => ({...r, type:'기능'})),
+                                ...rawNonFunc.map(r => ({...r, type:'비기능'}))
+                            ];
+                            return (
                             <table style={{borderCollapse:'collapse',fontSize:11,width:'max-content',minWidth:'100%'}}>
                                 <thead style={{position:'sticky',top:0,background:'#F2EFEC',zIndex:10}}>
-                                    <tr>{['NO','업무분류','업무_대','기능_중','구성_소','요구정의명','상세내용','연관요구사항','제약사항','발생일','분류/유형','우선순위'].map(h => (
+                                    <tr>{['원본ID','유형','요구사항명','상세내용','업무분류','업무_대','기능_중','구성_소','요구정의명','상세내용(구체화)','연관요구사항','제약사항','발생일','분류/유형','우선순위'].map(h => (
                                         <th key={h} style={{padding:'11px 13px',textAlign:'left',fontSize:9,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.06em',borderBottom:'2px solid #E4E0DC',whiteSpace:'nowrap'}}>{h}</th>
                                     ))}</tr>
                                 </thead>
                                 <tbody>
-                                    {optimizedReqs.map((r,i) => (
-                                        <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}} onClick={() => setSelectedItem({type:'opt',data:r})}>
-                                            <td style={{padding:'9px 13px',color:'#9C9489',textAlign:'center',whiteSpace:'nowrap'}}>{r.NO}</td>
-                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.업무분류}</td>
-                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.업무_대}</td>
-                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.기능_중}</td>
-                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.구성_소||'-'}</td>
-                                            <td style={{padding:'9px 13px',fontWeight:600,color:'#292524',minWidth:180}}>{r.요구정의명}</td>
-                                            <td style={{padding:'9px 13px',color:'#57534E',lineHeight:1.6,minWidth:320}}>{r.고객_요구사항_상세_내용}</td>
-                                            <td style={{padding:'9px 13px',minWidth:160}}><div style={{display:'flex',flexWrap:'wrap',gap:3}}>{r.related_reqs?.slice(0,3).map((rel,j) => <RelBadge key={j} rel={rel}/>)}</div></td>
-                                            <td style={{padding:'9px 13px',color:'#57534E',minWidth:120}}>{r.제약사항||'-'}</td>
-                                            <td style={{padding:'9px 13px',fontFamily:'IBM Plex Mono',color:'#9C9489',fontSize:10,whiteSpace:'nowrap'}}>{r.요건_발생일||'-'}</td>
-                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.요구사항유형분류?.분류||'-'}/{r.요구사항유형분류?.유형||'-'}</td>
-                                            <td style={{padding:'9px 13px',whiteSpace:'nowrap'}}><span className={`priority-${r.우선순위}`}>{r.우선순위||'-'}</span></td>
+                                    {mergedRaw.map((raw, i) => {
+                                        const matched = optimizedReqs.find(opt =>
+                                            opt.related_reqs?.some(rel => rel.target_id === raw.id)
+                                        );
+                                        return (
+                                        <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}}
+                                            onClick={() => matched && setSelectedItem({type:'opt', data:matched})}>
+                                            <td style={{padding:'9px 13px',fontFamily:'IBM Plex Mono',fontWeight:600,color:'#D4692A',fontSize:10,whiteSpace:'nowrap'}}>{raw.id}</td>
+                                            <td style={{padding:'9px 13px'}}><span className={`badge ${raw.type==='기능' ? 'badge-rel' : 'badge-dup'}`}>{raw.type}</span></td>
+                                            <td style={{padding:'9px 13px',fontWeight:600,color:'#292524',minWidth:160}}>{raw.title}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',lineHeight:1.6,minWidth:200}}>{raw.detail}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{matched?.업무분류||'-'}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{matched?.업무_대||'-'}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{matched?.기능_중||'-'}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{matched?.구성_소||'-'}</td>
+                                            <td style={{padding:'9px 13px',fontWeight:600,color:'#292524',minWidth:180}}>{matched?.요구정의명||'-'}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',lineHeight:1.6,minWidth:260}}>{matched?.고객_요구사항_상세_내용||'-'}</td>
+                                            <td style={{padding:'9px 13px',minWidth:160}}><div style={{display:'flex',flexWrap:'wrap',gap:3}}>{matched?.related_reqs?.slice(0,3).map((rel,j) => <RelBadge key={j} rel={rel}/>)}</div></td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',minWidth:120}}>{matched?.제약사항||'-'}</td>
+                                            <td style={{padding:'9px 13px',fontFamily:'IBM Plex Mono',color:'#9C9489',fontSize:10,whiteSpace:'nowrap'}}>{matched?.요건_발생일||'-'}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{matched?.요구사항유형분류?.분류||'-'}/{matched?.요구사항유형분류?.유형||'-'}</td>
+                                            <td style={{padding:'9px 13px',whiteSpace:'nowrap'}}><span className={`priority-${matched?.우선순위}`}>{matched?.우선순위||'-'}</span></td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
-                        ) : activeTab==='충돌' ? <ConflictsTable/>
-                        : activeTab==='파이프라인' ? <PipelineTab/> : null}
+                            );
+                        })() : <ConflictsTable/>}
                     </div>
                 </div>
             </div>
@@ -938,19 +897,19 @@ const App = () => {
                                                 whiteSpace:'nowrap',
                                             }}>
                                             {t}
-                                            {t !== '파이프라인' && <span style={{
+                                            <span style={{
                                                 background: isActive ? (isDanger ? '#FFF0F0' : '#FEF0DC') : '#F2EFEC',
                                                 color: isActive ? activeColor : '#9C9489',
                                                 padding:'2px 8px', borderRadius:20,
                                                 fontSize:12, fontWeight:700,
-                                            }}>{tabCounts[t]}</span>}
+                                            }}>{tabCounts[t]}</span>
                                         </button>
                                     );
                                 })}
                             </div>
                         )}
-                        {/* Sub-tab Row - 선별결과 기능/비기능 필터 */}
-                        {hasResults && activeTab === '선별결과' && (
+                        {/* Sub-tab Row - 요구사항정의서 기능/비기능 필터 */}
+                        {hasResults && activeTab === 'UIUX 선별' && (
                             <div style={{display:'flex',alignItems:'center',gap:6,padding:'8px 24px 0',background:'white',borderTop:'1px solid #F2EFEC'}}>
                                 <span style={{fontSize:10,fontWeight:700,color:'#C8BFB8',textTransform:'uppercase',letterSpacing:'0.1em',marginRight:4}}>분류</span>
                                 {[
@@ -1082,41 +1041,55 @@ const App = () => {
                             <div className="fade-up" style={{background:'white',borderRadius:12,border:'1px solid #E4E0DC',overflow:'hidden'}} className="card-shadow">
                                 {/* Table content */}
                                 <div style={{maxHeight:'calc(100vh - 340px)',overflow:'auto'}}>
-                                    {activeTab==='UIUX 선별' && mergedRaw.length > 0 && <MergedRawTable/>}
-                                    {activeTab==='파이프라인' && <PipelineTab/>}
-                                    {activeTab==='선별결과' && optimizedReqs.length > 0 && (() => {
-                                        const filtered = reqSubTab === '전체' ? optimizedReqs : optimizedReqs.filter(r => r.요구사항유형분류?.분류 === reqSubTab);
+                                    {activeTab==='UIUX 선별' && (() => {
+                                        const mergedRaw = [
+                                            ...rawFunc.map(r => ({...r, type:'기능'})),
+                                            ...rawNonFunc.map(r => ({...r, type:'비기능'}))
+                                        ];
+                                        const filtered = reqSubTab === '전체' ? mergedRaw
+                                            : mergedRaw.filter(r => r.type === reqSubTab);
                                         return (
-                                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:1600}}>
+                                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:2000}}>
                                             <thead style={{position:'sticky',top:0,background:'#F2EFEC',zIndex:10}}>
-                                                <tr>{['NO','업무분류','업무_대','기능_중','구성_소','요구정의명','상세내용 (구체화)','연관요구사항 / HITL','제약사항','요건_발생일','분류/유형','우선순위'].map(h => (
+                                                <tr>{['원본ID','유형','요구사항명','상세내용','업무분류','업무_대','기능_중','구성_소','요구정의명','상세내용(구체화)','연관요구사항 / HITL','제약사항','발생일','분류/유형','우선순위'].map(h => (
                                                     <th key={h} style={{padding:'11px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.08em',borderBottom:'2px solid #E4E0DC',whiteSpace:'nowrap'}}>{h}</th>
                                                 ))}</tr>
                                             </thead>
                                             <tbody>
-                                                {filtered.map((r,i) => (
-                                                    <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}} onClick={() => setSelectedItem({type:'opt',data:r})}>
-                                                        <td style={{padding:'10px 14px',color:'#9C9489',fontSize:11,textAlign:'center'}}>{r.NO}</td>
-                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{r.업무분류}</td>
-                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{r.업무_대}</td>
-                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{r.기능_중}</td>
-                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{r.구성_소||'-'}</td>
-                                                        <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',minWidth:180}}>{r.요구정의명}</td>
-                                                        <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6,minWidth:260}}>{r.고객_요구사항_상세_내용}</td>
+                                                {filtered.map((raw, i) => {
+                                                    const matched = optimizedReqs.find(opt =>
+                                                        opt.related_reqs?.some(rel => rel.target_id === raw.id)
+                                                    );
+                                                    return (
+                                                    <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}}
+                                                        onClick={() => matched && setSelectedItem({type:'opt', data:matched})}>
+                                                        <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',fontWeight:600,color:'#D4692A',fontSize:10,whiteSpace:'nowrap'}}>{raw.id}</td>
+                                                        <td style={{padding:'10px 14px'}}>
+                                                            <span className={`badge ${raw.type==='기능' ? 'badge-rel' : 'badge-dup'}`}>{raw.type}</span>
+                                                        </td>
+                                                        <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',minWidth:160}}>{raw.title}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6,minWidth:200}}>{raw.detail}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{matched?.업무분류||'-'}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{matched?.업무_대||'-'}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{matched?.기능_중||'-'}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{matched?.구성_소||'-'}</td>
+                                                        <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',minWidth:180}}>{matched?.요구정의명||'-'}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6,minWidth:260}}>{matched?.고객_요구사항_상세_내용||'-'}</td>
                                                         <td style={{padding:'10px 14px',minWidth:180}}>
                                                             <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-                                                                {r.related_reqs?.map((rel,j) => <RelBadge key={j} rel={rel}/>)}
-                                                                {r.ambiguity_hitl?.is_ambiguous && (
+                                                                {matched?.related_reqs?.map((rel,j) => <RelBadge key={j} rel={rel}/>)}
+                                                                {matched?.ambiguity_hitl?.is_ambiguous && (
                                                                     <span className="badge badge-ambig"><AlertTri size={9}/> 모호성</span>
                                                                 )}
                                                             </div>
                                                         </td>
-                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,minWidth:120}}>{r.제약사항||'-'}</td>
-                                                        <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',color:'#9C9489',fontSize:10,whiteSpace:'nowrap'}}>{r.요건_발생일||'-'}</td>
-                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{r.요구사항유형분류?.분류||'-'}/{r.요구사항유형분류?.유형||'-'}</td>
-                                                        <td style={{padding:'10px 14px',whiteSpace:'nowrap'}}><span className={`priority-${r.우선순위}`}>{r.우선순위||'-'}</span></td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,minWidth:120}}>{matched?.제약사항||'-'}</td>
+                                                        <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',color:'#9C9489',fontSize:10,whiteSpace:'nowrap'}}>{matched?.요건_발생일||'-'}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{matched?.요구사항유형분류?.분류||'-'}/{matched?.요구사항유형분류?.유형||'-'}</td>
+                                                        <td style={{padding:'10px 14px',whiteSpace:'nowrap'}}><span className={`priority-${matched?.우선순위}`}>{matched?.우선순위||'-'}</span></td>
                                                     </tr>
-                                                ))}
+                                                    );
+                                                })}
                                             </tbody>
                                         </table>
                                         );
