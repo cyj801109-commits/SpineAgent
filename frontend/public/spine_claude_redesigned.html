@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPINE · 요구사항정의서 에이전트</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        ink: '#1C1917',
+                        panel: '#231F1B',
+                        panelLight: '#2C2724',
+                        teal: '#D4692A',
+                        tealDim: '#B35E24',
+                        surface: '#FAFAF8',
+                        card: '#FFFFFF',
+                        border: '#E4E0DC',
+                        muted: '#9C9489',
+                        body: '#292524',
+                        danger: '#F04E4E',
+                        warn: '#F5A623',
+                    },
+                    fontFamily: {
+                        sans: ['DM Sans', 'sans-serif'],
+                        mono: ['IBM Plex Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * { -webkit-font-smoothing: antialiased; }
+        body { font-family: 'DM Sans', sans-serif; background: #FAFAF8; color: #292524; margin: 0; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #C8BFB8; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #9C9489; }
+
+        .panel-gradient {
+            background: linear-gradient(160deg, #231F1B 0%, #1C1917 100%);
+        }
+        .claude-glow {
+            box-shadow: 0 0 20px rgba(212, 105, 42, 0.25);
+        }
+        .card-shadow {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+        }
+        .card-shadow-lg {
+            box-shadow: 0 4px 16px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+        }
+
+        .tab-pill {
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            border: none;
+            outline: none;
+        }
+        .tab-active {
+            background: #1C1917;
+            color: #D4692A;
+        }
+        .tab-inactive {
+            background: transparent;
+            color: #9C9489;
+        }
+        .tab-inactive:hover {
+            background: #E4E0DC;
+            color: #292524;
+        }
+        .tab-danger-active {
+            background: #FFF0F0;
+            color: #F04E4E;
+        }
+
+        .step-dot {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700;
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+        .step-active { background: #D4692A; color: white; animation: pulse-teal 1.5s infinite; }
+        .step-done { background: #FEF0DC; color: #D4692A; }
+        .step-pending { background: #F2EFEC; color: #9C9489; }
+
+        @keyframes pulse-teal {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(212,105,42,0.4); }
+            50% { box-shadow: 0 0 0 8px rgba(212,105,42,0); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
+
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-up { animation: fadeUp 0.3s ease-out forwards; }
+
+        @keyframes scaleIn {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .scale-in { animation: scaleIn 0.2s ease-out forwards; }
+
+        .upload-zone {
+            border: 2px dashed #C8BFB8;
+            border-radius: 10px;
+            transition: all 0.2s;
+        }
+        .upload-zone:hover {
+            border-color: #D4692A;
+            background: rgba(212,105,42,0.04);
+        }
+        .btn-primary {
+            background: #D4692A;
+            color: white;
+            border: none;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .btn-primary:hover { background: #B35E24; }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-primary:disabled { background: #C8BFB8; cursor: not-allowed; }
+
+        .metric-card { border-left: 3px solid transparent; }
+        .metric-teal { border-left-color: #D4692A; }
+        .metric-blue { border-left-color: #5B8DEF; }
+        .metric-red { border-left-color: #F04E4E; }
+
+        .req-row { transition: background 0.1s; cursor: pointer; }
+        .req-row:hover { background: #FEF6ED; }
+
+        .badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 2px 8px; border-radius: 4px;
+            font-size: 10px; font-weight: 700;
+            font-family: 'IBM Plex Mono', monospace;
+        }
+        .badge-rel { background: #FEF0DC; color: #92400E; }
+        .badge-dup { background: #FFF4E5; color: #C07800; }
+        .badge-conflict { background: #FFF0F0; color: #D03030; }
+        .badge-ambig { background: #FEF0DC; color: #92400E; border: 1px solid #D4692A; }
+
+        .priority-상 { color: #E53E3E; font-weight: 700; }
+        .priority-중 { color: #C07800; font-weight: 700; }
+        .priority-하 { color: #2D8A5E; font-weight: 700; }
+
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 80;
+            background: rgba(28,25,23,0.6);
+            backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+            padding: 24px;
+        }
+        .input-field {
+            width: 100%; border: 1.5px solid #E4E0DC;
+            border-radius: 8px; padding: 10px 14px;
+            font-size: 14px; font-family: 'DM Sans', sans-serif;
+            transition: border-color 0.15s;
+            outline: none; background: white; color: #292524;
+        }
+        .input-field:focus { border-color: #D4692A; }
+        .select-field {
+            width: 100%; border: 1.5px solid #E4E0DC;
+            border-radius: 8px; padding: 10px 14px;
+            font-size: 14px; font-family: 'DM Sans', sans-serif;
+            outline: none; background: white; color: #292524;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useEffect } = React;
+
+/* ───────── Icons ───────── */
+const Icon = ({d, size=16, className='', fill='none', strokeWidth=1.8}) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor"
+         strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+        {Array.isArray(d) ? d.map((p,i) => <path key={i} d={p}/>) : <path d={p}/>}
+    </svg>
+);
+
+const Layers = ({size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>;
+const Play = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+const Spinner = ({size=16,className=''}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={`spin ${className}`}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>;
+const Plus = ({size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const X = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+const Check = ({size=14,className=''}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className={className}><polyline points="20 6 9 17 4 12"/></svg>;
+const Download = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+const Settings = ({size=18}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>;
+const AlertTri = ({size=12,className=''}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={className}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+const File = ({size=14,className=''}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>;
+const Maximize = ({size=13}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>;
+const Edit = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const ShieldCheck = ({size=18,className=''}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>;
+
+/* ───────── Main App ───────── */
+const App = () => {
+    const [apiKey, setApiKey] = useState('');
+    const [apiModel, setApiModel] = useState('gemini-2.5-flash');
+    const [showSettings, setShowSettings] = useState(true);
+    const [inputText, setInputText] = useState('');
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [uploadedFiles, setUploadedFiles] = useState([]);
+    const [progressStep, setProgressStep] = useState(0);
+    const [metrics, setMetrics] = useState(null);
+    const [rawFunc, setRawFunc] = useState([]);
+    const [rawNonFunc, setRawNonFunc] = useState([]);
+    const [optimizedReqs, setOptimizedReqs] = useState([]);
+    const [conflicts, setConflicts] = useState([]);
+    const [errorMessage, setErrorMessage] = useState(null);
+    const [activeTab, setActiveTab] = useState('UIUX 선별');
+    const [reqSubTab, setReqSubTab] = useState('전체');
+    const [selectedItem, setSelectedItem] = useState(null);
+    const [isFullScreen, setIsFullScreen] = useState(false);
+    const [isCustomEditing, setIsCustomEditing] = useState(false);
+    const [customOptionText, setCustomOptionText] = useState('');
+    const fileInputRef = useRef(null);
+
+    const processingSteps = [
+        { title: 'Input Processing', desc: '텍스트·파일 데이터 통합' },
+        { title: 'Intake Agent', desc: '원본 데이터 수신 및 검증' },
+        { title: 'Extraction Agent', desc: '기능·비기능 요구사항 분리' },
+        { title: 'ID Verification', desc: '원본 ID 무결성 검증' },
+        { title: 'Optimization Agent', desc: '모호성 제거 및 구체화' },
+        { title: 'Logic Architect', desc: '연관 관계 매핑 처리' },
+        { title: 'Conflict Detector', desc: '정책 충돌 탐지' },
+        { title: 'Pipeline Complete', desc: '결과 테이블 렌더링' },
+    ];
+
+    useEffect(() => {
+        const k = localStorage.getItem('SPINE_API_KEY');
+        const m = localStorage.getItem('SPINE_API_MODEL');
+        if (k) { setApiKey(k); setShowSettings(false); }
+        if (m) setApiModel(m);
+    }, []);
+
+    const handleSaveSettings = () => {
+        localStorage.setItem('SPINE_API_KEY', apiKey);
+        localStorage.setItem('SPINE_API_MODEL', apiModel);
+        setShowSettings(false);
+    };
+
+    const handleFileUpload = (e) => {
+        const files = Array.from(e.target.files);
+        if (!files.length) return;
+        setUploadedFiles(prev => [...prev, ...files.map(f => ({ name: f.name, id: Date.now() + Math.random(), originFile: f }))]);
+    };
+
+    const parseFileContent = async (file) => new Promise((res, rej) => {
+        const reader = new FileReader();
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (ext === 'xlsx' || ext === 'xls') {
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                    res(json.map(r => r.join('\t')).join('\n'));
+                } catch(err) { rej(err); }
+            };
+            reader.readAsArrayBuffer(file);
+        } else {
+            reader.onload = (e) => res(e.target.result);
+            reader.readAsText(file, 'UTF-8');
+        }
+    });
+
+    const exportToExcel = () => {
+        const wb = XLSX.utils.book_new();
+        // ① UIUX 선별 시트
+        if (mergedRaw.length) {
+            const ws1 = XLSX.utils.json_to_sheet(mergedRaw.map(r => {
+                const m = findOptMatch(r.id);
+                return {'원본ID':r.id,'유형':r.type,'요구사항명':r.title,'상세내용':r.detail,'업무분류':m?.업무분류||'','업무_대':m?.업무_대||'','기능_중':m?.기능_중||'','구성_소':m?.구성_소||'','요구정의명':m?.요구정의명||'','상세내용(구체화)':m?.고객_요구사항_상세_내용||'','제약사항':m?.제약사항||'','발생일':m?.요건_발생일||'','분류/유형':m?`${m.요구사항유형분류?.분류||''}/${m.요구사항유형분류?.유형||''}`:'','우선순위':m?.우선순위||''};
+            }));
+            XLSX.utils.book_append_sheet(wb, ws1, 'UIUX 선별');
+        }
+        // ② 선별결과 시트
+        if (optimizedReqs.length) {
+            const ws2 = XLSX.utils.json_to_sheet(optimizedReqs.map(r => ({
+                'NO':r.NO,'업무분류':r.업무분류,'업무_대':r.업무_대,'기능_중':r.기능_중,'구성_소':r.구성_소,
+                '요구정의명':r.요구정의명,'상세내용(구체화)':r.고객_요구사항_상세_내용,
+                '연관요구사항':r.related_reqs?.map(rel=>`[${rel.relation_type}] ${rel.target_id}`).join(', ')||'',
+                '제약사항':r.제약사항||'','발생일':r.요건_발생일||'',
+                '분류/유형':`${r.요구사항유형분류?.분류||''}/${r.요구사항유형분류?.유형||''}`,'우선순위':r.우선순위||'',
+            })));
+            XLSX.utils.book_append_sheet(wb, ws2, '선별결과');
+        }
+        // ③ 충돌 시트
+        if (conflicts.length) {
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conflicts.map(c => ({'충돌ID':c.conflict_id,'관련ID':c.involved_req_ids.join(', '),'충돌사유':c.conflict_reason}))), '충돌');
+        }
+        // ④ 파이프라인 시트
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(processingSteps.map((s,i) => ({'단계':i+1,'처리명':s.title,'설명':s.desc,'상태':metrics?'완료':'대기'}))), '파이프라인');
+        if (!wb.SheetNames.length) { alert('내보낼 데이터가 없습니다.'); return; }
+        XLSX.writeFile(wb, '선별결과_SPINE.xlsx');
+    };
+
+    const handleHitlDecision = (item, selectedOption, hitlType) => {
+        if (hitlType === 'conflict') {
+            setConflicts(prev => prev.filter(c => c.conflict_id !== item.conflict_id));
+            setOptimizedReqs(prev => [...prev, {
+                NO: prev.length + 1,
+                요구사항ID: `REQ-HITL-${String(prev.length + 1).padStart(3, '0')}`,
+                업무분류: '의사결정', 업무_대: '정책확정', 기능_중: 'HITL', 구성_소: '충돌해결',
+                요구정의명: `[확정] ${item.conflict_reason.substring(0, 20)}...`,
+                고객_요구사항_상세_내용: `PM 의사결정 확정: ${selectedOption}`,
+                제약사항: `관련: ${item.involved_req_ids.join(', ')}`,
+                요건_발생일: new Date().toISOString().split('T')[0],
+                요구사항유형분류: { 분류: '기능', 유형: '정책' }, 우선순위: '상',
+                related_reqs: item.involved_req_ids.map(id => ({ target_id: id, relation_type: '통합', reason: '충돌 해결' }))
+            }]);
+        } else if (hitlType === 'ambiguity') {
+            setOptimizedReqs(prev => prev.map(req =>
+                req.요구사항ID === item.요구사항ID
+                    ? { ...req, 고객_요구사항_상세_내용: `[정량화 확정] ${selectedOption}`, ambiguity_hitl: { ...req.ambiguity_hitl, is_ambiguous: false } }
+                    : req
+            ));
+        }
+        setSelectedItem(null);
+    };
+
+    /* ───── Gemini API ───── */
+    const callClaudeAPI = async (promptData, systemInstruction, schemaDefinition) => {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${apiModel}:generateContent?key=${apiKey}`;
+        const prompt = `${promptData}\n\n위 데이터를 분석하여 아래 JSON 스키마 구조로만 정확하게 출력하라. 마크다운 백틱(\`\`\`) 없이 순수 JSON 객체만 반환하라.\n${schemaDefinition}`;
+        let retries = 3, delay = 2000;
+        while (retries > 0) {
+            try {
+                const response = await fetch(endpoint, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        systemInstruction: { parts: [{ text: systemInstruction }] },
+                        generationConfig: { responseMimeType: "application/json", temperature: 0.1, topP: 0.6, maxOutputTokens: 65536 }
+                    })
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error?.message || `API 오류 (${response.status})`);
+                }
+                const data = await response.json();
+                const candidate = data.candidates?.[0];
+                if (candidate?.finishReason === 'MAX_TOKENS') throw new Error('[출력 한도 초과] 요구사항이 매우 많습니다. 30개 이하로 나누어 가동해 주세요.');
+                let text = candidate?.content?.parts?.[0]?.text || '';
+                const fi = text.indexOf('{'), li = text.lastIndexOf('}');
+                if (fi !== -1 && li !== -1) {
+                    try { return JSON.parse(text.substring(fi, li + 1)); }
+                    catch (e) { throw new Error(`JSON 파싱 실패: ${e.message}`); }
+                }
+                throw new Error('AI 응답에서 JSON을 찾지 못했습니다.');
+            } catch (err) {
+                retries--;
+                if (retries === 0) {
+                    const msg = err.message.toLowerCase();
+                    if (msg.includes('quota') || msg.includes('429')) throw new Error('[API 할당량 초과] 잠시 후 재시도해 주세요.');
+                    throw err;
+                }
+                await new Promise(r => setTimeout(r, delay));
+                delay *= 1.5;
+            }
+        }
+    };
+
+    const analyzeLogic = async () => {
+        if (!apiKey) { setShowSettings(true); return; }
+        setIsAnalyzing(true); setErrorMessage(null); setMetrics(null);
+        try {
+            setProgressStep(0);
+            let combinedText = inputText;
+            for (const f of uploadedFiles) {
+                if (f.originFile) combinedText += `\n\n--- [FILE: ${f.name}] ---\n${await parseFileContent(f.originFile)}`;
+            }
+            if (!combinedText.trim()) throw new Error('분석할 데이터가 없습니다. 파일을 업로드하거나 텍스트를 입력해 주세요.');
+            setProgressStep(1);
+
+            const coreSystemPrompt = `당신은 SI 프로젝트의 척추 역할을 하는 'PM 보조 의사결정 에이전트'임.
+[데이터 무결성 절대 준수 규칙]
+1. 원본성 및 순서 유지: 입력된 텍스트/엑셀의 물리적 행 순서를 임의로 정렬하지 말 것.
+2. ID 조작 금지: 원본 텍스트에 있는 ID를 100% 그대로 추출할 것.
+3. 매핑 정확도: optimized_requirements 내의 related_reqs.target_id는 반드시 원본 ID와 완벽히 일치해야 함.
+4. 스키마 엄수: JSON 스키마에 정의되지 않은 임의의 텍스트를 절대 추가하지 말 것.
+5. 토큰 최적화: 고객_요구사항_상세_내용 및 판단 근거는 핵심만 간결하게 요약할 것.
+
+[요구사항 ID 명명 규칙]
+구조: REQ-{분류영문}-{Level1(2자리)}-{Level2/3(3자리)} (예: REQ-USR-01-001)
+- Level1: USR(01), ADM(02), SRV(03), API(04), UX(05), CMN(06), INT(07), NFR(18)
+- Level2/3: 01(로그인), 02(로그아웃), 03(메인화면), 04(검색), 05(MySpace) 등 문맥에 맞게 할당`;
+
+            setProgressStep(2);
+            const schema1 = `{"raw_functional_reqs":[{"id":"원본ID","title":"요구사항명","detail":"내용"}],"raw_non_functional_reqs":[{"id":"원본ID","title":"요구사항명","detail":"내용"}]}`;
+            const extracted = await callClaudeAPI(combinedText, coreSystemPrompt, schema1);
+            setRawFunc(extracted.raw_functional_reqs || []);
+            setRawNonFunc(extracted.raw_non_functional_reqs || []);
+            setProgressStep(3); setProgressStep(4);
+
+            const schema2 = `{"optimization_summary":{"reduction_prediction":"절감 수치","reduction_reason":"판단 근거","ambiguity_resolved_count":0,"conflict_req_count":0},"optimized_requirements":[{"NO":1,"요구사항ID":"새ID","업무분류":"대분류","업무_대":"업무명","기능_중":"기능명","구성_소":"상세","요구정의명":"기능명","고객_요구사항_상세_내용":"구체화된 요건","제약사항":"제약","요건_발생일":"YYYY-MM-DD","요구사항유형분류":{"분류":"기능/비기능","유형":"유형"},"우선순위":"상/중/하","related_reqs":[{"target_id":"관련ID","relation_type":"중복/통합/연결/충돌","reason":"이유"}],"ambiguity_hitl":{"is_ambiguous":true,"original_text":"원문","ambiguity_reason":"사유","suggested_options":["대안1","대안2"]}}]}`;
+            const optimized = await callClaudeAPI(JSON.stringify(extracted), coreSystemPrompt, schema2);
+            setMetrics(optimized.optimization_summary);
+            setOptimizedReqs(optimized.optimized_requirements || []);
+            setProgressStep(5); setProgressStep(6);
+
+            const schema3 = `{"conflicts":[{"conflict_id":"C-001","involved_req_ids":["ID배열"],"conflict_reason":"충돌 사유","suggested_options":["대안1","대안2"]}]}`;
+            const conflictData = await callClaudeAPI(JSON.stringify(optimized.optimized_requirements), coreSystemPrompt, schema3);
+            setConflicts(conflictData.conflicts || []);
+            if (optimized.optimization_summary) setMetrics({ ...optimized.optimization_summary, conflict_req_count: conflictData.conflicts?.length || 0 });
+            setProgressStep(7);
+            setActiveTab('선별결과');
+        } catch (e) {
+            setErrorMessage(e.message);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    /* ───── Sub Components ───── */
+    const RelBadge = ({rel}) => {
+        const cls = rel.relation_type === '중복' ? 'badge-dup' : rel.relation_type === '충돌' ? 'badge-conflict' : 'badge-rel';
+        return <span className={`badge ${cls}`}>{rel.relation_type}: {rel.target_id}</span>;
+    };
+
+    const RawTable = ({data}) => (
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead style={{position:'sticky',top:0,background:'#FAFAF8',zIndex:10}}>
+                <tr>
+                    {['원본 ID','요구사항명','상세내용'].map(h => (
+                        <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:10,fontWeight:700,color:'#9C9489',letterSpacing:'0.08em',textTransform:'uppercase',borderBottom:'2px solid #E4E0DC'}}>{h}</th>
+                    ))}
+                </tr>
+            </thead>
+            <tbody>
+                {data.map((r,i) => (
+                    <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}}>
+                        <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',fontWeight:600,fontSize:11,color:'#D4692A',whiteSpace:'nowrap'}}>{r.id}</td>
+                        <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',width:240}}>{r.title}</td>
+                        <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6}}>{r.detail}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+
+    const ConflictsTable = () => (
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead style={{position:'sticky',top:0,background:'#FFF8F8',zIndex:10}}>
+                <tr>
+                    {['충돌 ID','관련 요구사항','충돌 사유 및 리스크','의사결정'].map(h => (
+                        <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:10,fontWeight:700,color:'#C06060',letterSpacing:'0.08em',textTransform:'uppercase',borderBottom:'2px solid #F5D0D0'}}>{h}</th>
+                    ))}
+                </tr>
+            </thead>
+            <tbody>
+                {conflicts.map((c,i) => (
+                    <tr key={i} className="req-row" style={{borderBottom:'1px solid #FEF0F0'}}
+                        onClick={() => setSelectedItem({type:'conflict',data:c})}>
+                        <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',fontWeight:700,color:'#F04E4E',fontSize:11}}>{c.conflict_id}</td>
+                        <td style={{padding:'10px 14px'}}><div style={{display:'flex',flexWrap:'wrap',gap:4}}>{c.involved_req_ids.map((id,j) => <span key={j} className="badge badge-conflict">{id}</span>)}</div></td>
+                        <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6}}>{c.conflict_reason}</td>
+                        <td style={{padding:'10px 14px'}}>
+                            <span style={{display:'inline-flex',alignItems:'center',gap:4,background:'#F04E4E',color:'white',padding:'4px 10px',borderRadius:6,fontSize:10,fontWeight:700,cursor:'pointer'}}>
+                                <AlertTri size={10}/> HITL 요망
+                            </span>
+                        </td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    );
+
+    const MergedRawTable = () => (
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:1800}}>
+            <thead style={{position:'sticky',top:0,background:'#F2EFEC',zIndex:10}}>
+                <tr>{['원본ID','유형','요구사항명','상세내용','업무분류','업무_대','기능_중','구성_소','요구정의명','상세내용(구체화)','연관요구사항','제약사항','발생일','분류/유형','우선순위'].map(h => (
+                    <th key={h} style={{padding:'11px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.06em',borderBottom:'2px solid #E4E0DC',whiteSpace:'nowrap'}}>{h}</th>
+                ))}</tr>
+            </thead>
+            <tbody>
+                {mergedRaw.map((r,i) => {
+                    const m = findOptMatch(r.id);
+                    return (
+                        <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}}>
+                            <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',fontWeight:600,fontSize:11,color:'#D4692A',whiteSpace:'nowrap'}}>{r.id}</td>
+                            <td style={{padding:'10px 14px'}}><span className={`badge ${r.type==='기능'?'badge-rel':'badge-dup'}`}>{r.type}</span></td>
+                            <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',minWidth:160}}>{r.title}</td>
+                            <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6,minWidth:200}}>{r.detail}</td>
+                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.업무분류||'-'}</td>
+                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.업무_대||'-'}</td>
+                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.기능_중||'-'}</td>
+                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.구성_소||'-'}</td>
+                            <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',minWidth:160}}>{m?.요구정의명||'-'}</td>
+                            <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6,minWidth:240}}>{m?.고객_요구사항_상세_내용||'-'}</td>
+                            <td style={{padding:'10px 14px',minWidth:140}}><div style={{display:'flex',flexWrap:'wrap',gap:3}}>{m?.related_reqs?.map((rel,j) => <RelBadge key={j} rel={rel}/>) || '-'}</div></td>
+                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{m?.제약사항||'-'}</td>
+                            <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',color:'#9C9489',fontSize:10,whiteSpace:'nowrap'}}>{m?.요건_발생일||'-'}</td>
+                            <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{m ? `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}` : '-'}</td>
+                            <td style={{padding:'10px 14px',whiteSpace:'nowrap'}}>{m ? <span className={`priority-${m.우선순위}`}>{m.우선순위}</span> : '-'}</td>
+                        </tr>
+                    );
+                })}
+            </tbody>
+        </table>
+    );
+
+    const PipelineTab = () => (
+        <div style={{maxWidth:560,margin:'20px auto'}}>
+            <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {processingSteps.map((step, idx) => {
+                    const isDone = !!metrics;
+                    return (
+                        <div key={idx} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',borderRadius:10,background:isDone?'#FAFAF8':'transparent',border:`1px solid ${isDone?'#E4E0DC':'#F2EFEC'}`,transition:'all 0.3s'}}>
+                            <div className={`step-dot ${isDone?'step-done':'step-pending'}`}>
+                                {isDone ? <Check size={12}/> : idx + 1}
+                            </div>
+                            <div style={{flex:1}}>
+                                <div style={{fontSize:13,fontWeight:600,color:isDone?'#292524':'#C0C5D0'}}>{step.title}</div>
+                                <div style={{fontSize:11,color:isDone?'#57534E':'#C0C5D0',marginTop:1}}>{step.desc}</div>
+                            </div>
+                            <span style={{fontSize:10,fontWeight:700,fontFamily:'IBM Plex Mono',color:isDone?'#2D8A5E':'#C8BFB8',textTransform:'uppercase'}}>{isDone?'완료':'대기'}</span>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+
+    const hasResults = metrics && !isAnalyzing && !errorMessage;
+    const tabs = ['UIUX 선별','선별결과','충돌','파이프라인'];
+    const tabCounts = {'UIUX 선별':rawFunc.length+rawNonFunc.length,'선별결과':optimizedReqs.length,'충돌':conflicts.length,'파이프라인':processingSteps.length};
+
+    const mergedRaw = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
+    const findOptMatch = (origId) => optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === origId));
+    const handleTabChange = (t) => { setActiveTab(t); setReqSubTab('전체'); };
+
+    /* ───── Detail Modal ───── */
+    const DetailModal = () => {
+        if (!selectedItem) return null;
+        const isConflict = selectedItem.type === 'conflict';
+        const d = selectedItem.data;
+        const isAmbig = d?.ambiguity_hitl?.is_ambiguous;
+        return (
+            <div className="modal-overlay" onClick={() => { setSelectedItem(null); setIsCustomEditing(false); setCustomOptionText(''); }}>
+                <div className="scale-in" style={{background:'white',borderRadius:16,width:'100%',maxWidth:720,maxHeight:'88vh',display:'flex',flexDirection:'column',overflow:'hidden',boxShadow:'0 24px 64px rgba(0,0,0,0.2)'}}
+                     onClick={e => e.stopPropagation()}>
+                    {/* Modal Header */}
+                    <div style={{padding:'20px 24px',borderBottom:'1px solid #E4E0DC',display:'flex',justifyContent:'space-between',alignItems:'center',background: isConflict||isAmbig ? '#FFF8F8':'#FEF9F5'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:12}}>
+                            <div style={{width:40,height:40,borderRadius:10,background:isConflict||isAmbig?'#FEE':'#FEF0DC',display:'flex',alignItems:'center',justifyContent:'center',color:isConflict||isAmbig?'#F04E4E':'#D4692A'}}>
+                                {isConflict||isAmbig ? <AlertTri size={18}/> : <ShieldCheck size={18}/>}
+                            </div>
+                            <div>
+                                <div style={{fontSize:15,fontWeight:700,color:'#1C1917'}}>{isConflict ? '정책 충돌 의사결정 (HITL)' : '요구사항 상세 / 모호성 결정 (HITL)'}</div>
+                                <div style={{fontSize:11,color:'#9C9489',fontFamily:'IBM Plex Mono',marginTop:2}}>{isConflict ? d.conflict_id : d.요구사항ID}</div>
+                            </div>
+                        </div>
+                        <button onClick={() => setSelectedItem(null)} style={{width:32,height:32,borderRadius:8,border:'1px solid #E4E0DC',background:'white',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'#9C9489'}}><X size={14}/></button>
+                    </div>
+
+                    <div style={{padding:24,overflowY:'auto',flex:1}}>
+                        {isConflict ? (
+                            <>
+                                <div style={{background:'#FFF5F5',borderRadius:10,padding:16,marginBottom:16,border:'1px solid #FDD'}}>
+                                    <div style={{fontSize:10,fontWeight:700,color:'#C06060',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:6}}>충돌 리스크 분석</div>
+                                    <div style={{fontSize:13,color:'#292524',lineHeight:1.7}}>{d.conflict_reason}</div>
+                                    <div style={{marginTop:10,paddingTop:10,borderTop:'1px solid #FDD',display:'flex',gap:6,flexWrap:'wrap'}}>
+                                        {d.involved_req_ids?.map((id,i) => <span key={i} className="badge badge-conflict">{id}</span>)}
+                                    </div>
+                                </div>
+                                <div style={{fontSize:11,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:10}}>해결 대안 선택</div>
+                                {d.suggested_options.map((opt,i) => (
+                                    <button key={i} onClick={() => handleHitlDecision(d, opt, 'conflict')}
+                                        style={{width:'100%',textAlign:'left',padding:'12px 16px',border:'1.5px solid #E4E0DC',borderRadius:10,marginBottom:8,background:'white',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:13,color:'#292524',transition:'all 0.15s'}}
+                                        onMouseEnter={e => {e.currentTarget.style.borderColor='#D4692A';e.currentTarget.style.background='#FEF9F5';}}
+                                        onMouseLeave={e => {e.currentTarget.style.borderColor='#E4E0DC';e.currentTarget.style.background='white';}}>
+                                        <span style={{lineHeight:1.6}}>{opt}</span>
+                                        <span style={{background:'#D4692A',color:'white',padding:'4px 12px',borderRadius:6,fontSize:10,fontWeight:700,whiteSpace:'nowrap',marginLeft:12}}>채택</span>
+                                    </button>
+                                ))}
+                                {!isCustomEditing ? (
+                                    <button onClick={() => setIsCustomEditing(true)}
+                                        style={{width:'100%',padding:'12px 16px',border:'1.5px dashed #C8BFB8',borderRadius:10,background:'transparent',cursor:'pointer',color:'#9C9489',fontSize:12,fontWeight:600,display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+                                        <Edit size={13}/> 직접 입력하여 확정
+                                    </button>
+                                ) : (
+                                    <div style={{border:'1.5px solid #D4692A',borderRadius:10,padding:14,background:'#FEF9F5'}}>
+                                        <textarea value={customOptionText} onChange={e => setCustomOptionText(e.target.value)}
+                                            placeholder="PM 의사결정 내용을 입력하세요..."
+                                            style={{width:'100%',border:'1px solid #E4E0DC',borderRadius:8,padding:10,fontSize:13,minHeight:80,resize:'none',fontFamily:'DM Sans',outline:'none',boxSizing:'border-box'}}/>
+                                        <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:10}}>
+                                            <button onClick={() => setIsCustomEditing(false)} style={{padding:'7px 14px',border:'1px solid #E4E0DC',borderRadius:8,background:'white',cursor:'pointer',fontSize:12,color:'#9C9489'}}>취소</button>
+                                            <button onClick={() => { if(customOptionText.trim()) handleHitlDecision(d, customOptionText.trim(), 'conflict'); }}
+                                                style={{padding:'7px 14px',border:'none',borderRadius:8,background:'#D4692A',color:'white',cursor:'pointer',fontSize:12,fontWeight:700}}>확정 완료</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10,marginBottom:16}}>
+                                    {[['계층',`${d.업무분류} > ${d.업무_대}`],['우선순위',d.우선순위],['제약사항',d.제약사항||'N/A']].map(([k,v]) => (
+                                        <div key={k} style={{background:'#FAFAF8',borderRadius:8,padding:'12px 14px',border:'1px solid #E4E0DC'}}>
+                                            <div style={{fontSize:10,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:4}}>{k}</div>
+                                            <div style={{fontSize:13,fontWeight:600,color: k==='우선순위' ? (v==='상'?'#E53E3E':v==='중'?'#C07800':'#2D8A5E') : '#292524'}}>{v}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div style={{fontSize:17,fontWeight:700,color:'#1C1917',marginBottom:10}}>{d.요구정의명}</div>
+                                <div style={{background:'#FAFAF8',borderRadius:10,padding:16,fontSize:13,color:'#57534E',lineHeight:1.8,border:'1px solid #E4E0DC',marginBottom:16}}>
+                                    {d.고객_요구사항_상세_내용}
+                                </div>
+                                {d.related_reqs?.length > 0 && (
+                                    <div style={{marginBottom:16}}>
+                                        <div style={{fontSize:10,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>연관 요구사항</div>
+                                        <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
+                                            {d.related_reqs.map((r,i) => <RelBadge key={i} rel={r}/>)}
+                                        </div>
+                                    </div>
+                                )}
+                                {isAmbig && (
+                                    <div style={{border:'1.5px solid #D4692A',borderRadius:10,padding:16,background:'#FEF9F5'}}>
+                                        <div style={{fontSize:10,fontWeight:700,color:'#92400E',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8,display:'flex',alignItems:'center',gap:6}}><AlertTri size={11}/> 모호성 해결 (Ambiguity Resolution)</div>
+                                        <div style={{fontSize:13,color:'#292524',marginBottom:12,lineHeight:1.7}}>{d.ambiguity_hitl.ambiguity_reason}</div>
+                                        {d.ambiguity_hitl.suggested_options.map((opt,i) => (
+                                            <button key={i} onClick={() => handleHitlDecision(d, opt, 'ambiguity')}
+                                                style={{width:'100%',textAlign:'left',padding:'10px 14px',border:'1.5px solid #E4E0DC',borderRadius:8,marginBottom:6,background:'white',cursor:'pointer',display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:13}}
+                                                onMouseEnter={e => {e.currentTarget.style.borderColor='#D4692A';}}
+                                                onMouseLeave={e => {e.currentTarget.style.borderColor='#E4E0DC';}}>
+                                                <span>{opt}</span>
+                                                <span style={{background:'#D4692A',color:'white',padding:'3px 10px',borderRadius:5,fontSize:10,fontWeight:700,marginLeft:10}}>확정</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                    <div style={{padding:'10px 24px',borderTop:'1px solid #E4E0DC',background:'#FAFAF8',textAlign:'center'}}>
+                        <span style={{fontSize:10,color:'#9C9489',fontWeight:600,letterSpacing:'0.08em',textTransform:'uppercase'}}>SPINE Pipeline Framework · PM Decision Engine</span>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    /* ───── Full Screen Modal ───── */
+    const FullScreenModal = () => (
+        <div className="modal-overlay scale-in" style={{alignItems:'stretch',background:'rgba(14,19,32,0.75)'}}>
+            <div style={{background:'#FAFAF8',borderRadius:16,flex:1,display:'flex',flexDirection:'column',overflow:'hidden',margin:8,boxShadow:'0 32px 80px rgba(0,0,0,0.3)'}}>
+
+                {/* ── 탭 + 버튼 한 줄 (이미지 구조) ── */}
+                <div style={{background:'white',borderBottom:'1px solid #E4E0DC',padding:'0 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+                    <div style={{display:'flex',gap:0}}>
+                        {tabs.map(t => {
+                            const isActive = activeTab === t;
+                            const isDanger = t === '충돌';
+                            const activeColor = isDanger ? '#F04E4E' : '#1C1917';
+                            const activeBg = isDanger ? '#F04E4E' : '#1C1917';
+                            return (
+                                <button key={t} onClick={() => handleTabChange(t)}
+                                    style={{
+                                        padding:'16px 20px', border:'none', cursor:'pointer',
+                                        background: isActive ? activeBg : 'transparent',
+                                        color: isActive ? 'white' : '#9C9489',
+                                        fontWeight: isActive ? 700 : 500,
+                                        fontSize: 14,
+                                        display:'flex', alignItems:'center', gap:7,
+                                        transition:'all 0.15s',
+                                        whiteSpace:'nowrap',
+                                        borderRadius: isActive ? '8px 8px 0 0' : 0,
+                                        marginTop: 8,
+                                    }}>
+                                    {t}
+                                    {t !== '파이프라인' && <span style={{
+                                        background: isActive ? 'rgba(255,255,255,0.2)' : '#F2EFEC',
+                                        color: isActive ? 'white' : '#9C9489',
+                                        padding:'2px 8px', borderRadius:20,
+                                        fontSize:12, fontWeight:700,
+                                    }}>{tabCounts[t]}</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                        <button onClick={exportToExcel} style={{display:'flex',alignItems:'center',gap:6,padding:'9px 18px',border:'none',borderRadius:8,background:'#D4692A',color:'white',cursor:'pointer',fontSize:13,fontWeight:700}}>
+                            <Download size={13}/> Excel 내보내기
+                        </button>
+                        <button onClick={() => setIsFullScreen(false)} style={{display:'flex',alignItems:'center',gap:6,padding:'9px 14px',border:'1px solid #E4E0DC',borderRadius:8,background:'white',cursor:'pointer',fontSize:13,color:'#57534E',fontWeight:600}}>
+                            <X size={13}/> 닫기
+                        </button>
+                    </div>
+                </div>
+
+                {/* ── 메트릭 카드 + AI 리포트 ── */}
+                <div style={{padding:'16px 24px',background:'white',borderBottom:'1px solid #E4E0DC',flexShrink:0}}>
+                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:16,marginBottom:14}}>
+                        {[
+                            {label:'요구사항 최적화', value:metrics?.reduction_prediction, sub:'업무 절감 예측치', color:'#D4692A', bg:'#FEF0DC'},
+                            {label:'모호성 보정',     value:`${metrics?.ambiguity_resolved_count||0}건`, sub:'표현 명확화 처리', color:'#5B8DEF', bg:'#FEF0DC'},
+                            {label:'정책 충돌',       value:`${metrics?.conflict_req_count||0}건`,      sub:'HITL 의사결정 필요', color:'#F04E4E', bg:'#FFF0F0'},
+                        ].map(m => (
+                            <div key={m.label} style={{background:'white',borderRadius:12,padding:'18px 20px',border:'1px solid #E4E0DC',borderLeft:`4px solid ${m.color}`}} className="card-shadow">
+                                <div style={{fontSize:10,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>{m.label}</div>
+                                <div style={{fontSize:30,fontWeight:800,color:m.color,letterSpacing:'-0.03em',marginBottom:6,lineHeight:1}}>{m.value}</div>
+                                <div style={{display:'inline-flex',background:m.bg,color:m.color,padding:'3px 9px',borderRadius:20,fontSize:10,fontWeight:600}}>{m.sub}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <div style={{background:'#FAFAF8',borderRadius:10,padding:'14px 18px',borderLeft:'3px solid #D4692A',fontSize:13,color:'#292524',lineHeight:1.8}}>
+                        <span style={{fontSize:10,fontWeight:700,color:'#D4692A',textTransform:'uppercase',letterSpacing:'0.08em',marginRight:10}}>AI 분석 근거</span>
+                        {metrics?.reduction_reason}
+                    </div>
+                </div>
+
+                {/* ── 테이블 (좌우 스크롤 포함) ── */}
+                <div style={{flex:1,overflow:'auto',padding:16}}>
+                    <div style={{background:'white',borderRadius:10,border:'1px solid #E4E0DC',overflow:'auto',minWidth:'100%'}}>
+                        {activeTab==='UIUX 선별' ? <MergedRawTable/>
+                        : activeTab==='선별결과' ? (
+                            <table style={{borderCollapse:'collapse',fontSize:11,width:'max-content',minWidth:'100%'}}>
+                                <thead style={{position:'sticky',top:0,background:'#F2EFEC',zIndex:10}}>
+                                    <tr>{['NO','업무분류','업무_대','기능_중','구성_소','요구정의명','상세내용','연관요구사항','제약사항','발생일','분류/유형','우선순위'].map(h => (
+                                        <th key={h} style={{padding:'11px 13px',textAlign:'left',fontSize:9,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.06em',borderBottom:'2px solid #E4E0DC',whiteSpace:'nowrap'}}>{h}</th>
+                                    ))}</tr>
+                                </thead>
+                                <tbody>
+                                    {optimizedReqs.map((r,i) => (
+                                        <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}} onClick={() => setSelectedItem({type:'opt',data:r})}>
+                                            <td style={{padding:'9px 13px',color:'#9C9489',textAlign:'center',whiteSpace:'nowrap'}}>{r.NO}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.업무분류}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.업무_대}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.기능_중}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.구성_소||'-'}</td>
+                                            <td style={{padding:'9px 13px',fontWeight:600,color:'#292524',minWidth:180}}>{r.요구정의명}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',lineHeight:1.6,minWidth:320}}>{r.고객_요구사항_상세_내용}</td>
+                                            <td style={{padding:'9px 13px',minWidth:160}}><div style={{display:'flex',flexWrap:'wrap',gap:3}}>{r.related_reqs?.slice(0,3).map((rel,j) => <RelBadge key={j} rel={rel}/>)}</div></td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',minWidth:120}}>{r.제약사항||'-'}</td>
+                                            <td style={{padding:'9px 13px',fontFamily:'IBM Plex Mono',color:'#9C9489',fontSize:10,whiteSpace:'nowrap'}}>{r.요건_발생일||'-'}</td>
+                                            <td style={{padding:'9px 13px',color:'#57534E',whiteSpace:'nowrap'}}>{r.요구사항유형분류?.분류||'-'}/{r.요구사항유형분류?.유형||'-'}</td>
+                                            <td style={{padding:'9px 13px',whiteSpace:'nowrap'}}><span className={`priority-${r.우선순위}`}>{r.우선순위||'-'}</span></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : activeTab==='충돌' ? <ConflictsTable/>
+                        : activeTab==='파이프라인' ? <PipelineTab/> : null}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    /* ───── Settings Modal ───── */
+    const SettingsModal = () => (
+        <div className="modal-overlay" onClick={() => setShowSettings(false)}>
+            <div className="scale-in" style={{background:'white',borderRadius:16,width:'100%',maxWidth:420,overflow:'hidden',boxShadow:'0 24px 64px rgba(0,0,0,0.2)'}} onClick={e => e.stopPropagation()}>
+                <div style={{padding:'20px 24px',borderBottom:'1px solid #E4E0DC',background:'linear-gradient(135deg,#231F1B,#1C1917)',display:'flex',alignItems:'center',gap:12}}>
+                    <div style={{width:36,height:36,borderRadius:8,background:'rgba(212,105,42,0.15)',border:'1px solid rgba(212,105,42,0.3)',display:'flex',alignItems:'center',justifyContent:'center',color:'#D4692A'}}><Settings size={16}/></div>
+                    <div>
+                        <div style={{fontSize:15,fontWeight:700,color:'white'}}>에이전트 환경 설정</div>
+                        <div style={{fontSize:11,color:'rgba(255,255,255,0.4)',marginTop:1}}>Gemini API · SPINE Pipeline v2</div>
+                    </div>
+                </div>
+                <div style={{padding:24}}>
+                    <div style={{marginBottom:16}}>
+                        <label style={{display:'block',fontSize:11,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Gemini API Key</label>
+                        <input type="password" className="input-field" placeholder="AIza..." value={apiKey} onChange={e => setApiKey(e.target.value)}/>
+                        {apiKey && (
+                            <div style={{marginTop:8,display:'flex',justifyContent:'space-between',alignItems:'center',background:'#FEF6ED',border:'1px solid #F5D4B8',borderRadius:8,padding:'8px 12px'}}>
+                                <span style={{fontSize:11,color:'#92400E',fontFamily:'IBM Plex Mono'}}>...{apiKey.slice(-8)}</span>
+                                <button onClick={() => { setApiKey(''); localStorage.removeItem('SPINE_API_KEY'); }} style={{fontSize:11,color:'#F04E4E',background:'none',border:'none',cursor:'pointer',fontWeight:600}}>초기화</button>
+                            </div>
+                        )}
+                    </div>
+                    <div style={{marginBottom:24}}>
+                        <label style={{display:'block',fontSize:11,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:8}}>Model</label>
+                        <select value={apiModel} onChange={e => setApiModel(e.target.value)} className="select-field">
+                            <option value="gemini-2.5-flash">Gemini 2.5 Flash (권장 · 다중호출 최적)</option>
+                            <option value="gemini-2.5-pro">Gemini 2.5 Pro (고성능 · 속도주의)</option>
+                            <option value="gemini-2.0-flash">Gemini 2.0 Flash (빠름 · 간단한 분석)</option>
+                        </select>
+                    </div>
+                    <button onClick={handleSaveSettings} className="btn-primary" style={{width:'100%',padding:'12px',borderRadius:10,fontSize:13,letterSpacing:'0.04em'}}>
+                        설정 완료 · 엔진 준비
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+
+    /* ───── MAIN RENDER ───── */
+    return (
+        <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',background:'#FAFAF8'}}>
+            {/* Modals */}
+            {showSettings && <SettingsModal/>}
+            {selectedItem && <DetailModal/>}
+            {isFullScreen && <FullScreenModal/>}
+
+            {/* Layout: Sidebar + Main */}
+            <div style={{display:'flex',flex:1,height:'100vh',overflow:'hidden'}}>
+
+                {/* ── LEFT SIDEBAR ── */}
+                <div className="panel-gradient" style={{width:280,flexShrink:0,display:'flex',flexDirection:'column',height:'100vh',overflow:'hidden'}}>
+                    {/* Brand */}
+                    <div style={{padding:'24px 20px 16px',borderBottom:'1px solid rgba(255,255,255,0.07)'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:4}}>
+                            <div style={{width:34,height:34,borderRadius:8,background:'rgba(212,105,42,0.15)',border:'1px solid rgba(212,105,42,0.25)',display:'flex',alignItems:'center',justifyContent:'center',color:'#D4692A'}}>
+                                <Layers size={16}/>
+                            </div>
+                            <div>
+                                <div style={{fontSize:16,fontWeight:800,color:'white',letterSpacing:'-0.02em'}}>SPINE</div>
+                                <div style={{fontSize:9,color:'rgba(255,255,255,0.35)',letterSpacing:'0.12em',textTransform:'uppercase',marginTop:1}}>요구사항 에이전트</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Status */}
+                    <div style={{padding:'12px 20px'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:8,background:'rgba(255,255,255,0.05)',borderRadius:8,padding:'8px 12px',border:'1px solid rgba(255,255,255,0.08)'}}>
+                            <div style={{width:7,height:7,borderRadius:'50%',background:apiKey?'#D4692A':'#57534E',boxShadow:apiKey?'0 0 8px rgba(212,105,42,0.6)':'none'}}/>
+                            <span style={{fontSize:11,color:apiKey?'#D4692A':'rgba(255,255,255,0.3)',fontWeight:600,letterSpacing:'0.06em',textTransform:'uppercase'}}>{apiKey ? 'Engine Ready' : 'Disconnected'}</span>
+                            <button onClick={() => setShowSettings(true)} style={{marginLeft:'auto',color:'rgba(255,255,255,0.3)',background:'none',border:'none',cursor:'pointer',padding:2,display:'flex',alignItems:'center'}}><Settings size={13}/></button>
+                        </div>
+                    </div>
+
+                    {/* Execute Button */}
+                    <div style={{padding:'8px 20px 12px'}}>
+                        <button onClick={analyzeLogic} disabled={isAnalyzing} className="btn-primary"
+                            style={{width:'100%',padding:'13px',borderRadius:10,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:8,letterSpacing:'0.02em'}}>
+                            {isAnalyzing ? <><Spinner size={14}/> 파이프라인 가동 중...</> : <><Play size={13}/> 엔진 가동 (Execute)</>}
+                        </button>
+                    </div>
+
+                    {/* File Upload */}
+                    <div style={{padding:'0 20px',flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+                        <div style={{fontSize:10,fontWeight:700,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:8}}>Input Data</div>
+
+                        <div className="upload-zone" style={{padding:'16px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:6,cursor:'pointer',marginBottom:10}}
+                             onClick={() => fileInputRef.current.click()}>
+                            <Plus size={18} style={{color:'rgba(255,255,255,0.3)'}}/>
+                            <span style={{fontSize:11,color:'rgba(255,255,255,0.35)',fontWeight:600}}>Excel / CSV 업로드</span>
+                            <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" multiple accept=".csv,.xlsx,.xls,.txt"/>
+                        </div>
+
+                        {uploadedFiles.length > 0 && (
+                            <div style={{marginBottom:8,maxHeight:100,overflowY:'auto'}}>
+                                {uploadedFiles.map(f => (
+                                    <div key={f.id} style={{display:'flex',alignItems:'center',gap:6,background:'rgba(255,255,255,0.06)',borderRadius:6,padding:'6px 10px',marginBottom:4,border:'1px solid rgba(255,255,255,0.08)'}}>
+                                        <File size={12} className="" style={{color:'#D4692A',flexShrink:0}}/>
+                                        <span style={{fontSize:10,color:'rgba(255,255,255,0.6)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>
+                                        <button onClick={() => setUploadedFiles(p => p.filter(x => x.id !== f.id))} style={{color:'rgba(255,255,255,0.25)',background:'none',border:'none',cursor:'pointer',display:'flex'}}><X size={11}/></button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div style={{fontSize:10,fontWeight:700,color:'rgba(255,255,255,0.3)',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:6}}>또는 직접 입력</div>
+                        <textarea value={inputText} onChange={e => setInputText(e.target.value)}
+                            placeholder="분석할 요구사항을 입력하세요..."
+                            style={{flex:1,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',borderRadius:10,padding:'12px',fontSize:12,color:'rgba(255,255,255,0.7)',resize:'none',fontFamily:'DM Sans',lineHeight:1.6,outline:'none',minHeight:120}}/>
+                    </div>
+
+                    {/* Bottom Footer */}
+                    <div style={{padding:'12px 20px',borderTop:'1px solid rgba(255,255,255,0.06)'}}>
+                        <div style={{fontSize:9,color:'rgba(255,255,255,0.2)',textTransform:'uppercase',letterSpacing:'0.1em',textAlign:'center'}}>SPINE Pipeline Framework v2 · Gemini API</div>
+                    </div>
+                </div>
+
+                {/* ── MAIN CONTENT ── */}
+                <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+
+                    {/* Top Bar */}
+                    <div style={{borderBottom:'1px solid #E4E0DC',background:'white',flexShrink:0}}>
+                        {/* Action Row */}
+                        <div style={{height:52,display:'flex',alignItems:'center',padding:'0 24px',justifyContent:'space-between',borderBottom: hasResults ? '1px solid #F2EFEC' : 'none'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:8}}>
+                                {!hasResults && !isAnalyzing && (
+                                    <span style={{fontSize:13,color:'#9C9489',fontWeight:500}}>요구사항을 입력하고 엔진을 가동하세요</span>
+                                )}
+                                {isAnalyzing && (
+                                    <div style={{display:'flex',alignItems:'center',gap:8,color:'#D4692A'}}>
+                                        <Spinner size={14}/>
+                                        <span style={{fontSize:13,fontWeight:600}}>AI 에이전트 파이프라인 가동 중...</span>
+                                    </div>
+                                )}
+                                {hasResults && (
+                                    <span style={{fontSize:13,color:'#9C9489',fontWeight:500}}>분석 완료 · 탭을 선택하여 결과를 확인하세요</span>
+                                )}
+                            </div>
+                            {hasResults && (
+                                <div style={{display:'flex',gap:8}}>
+                                    <button onClick={exportToExcel} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 16px',border:'none',borderRadius:8,background:'#D4692A',color:'white',cursor:'pointer',fontSize:13,fontWeight:700}}>
+                                        <Download size={13}/> Excel 내보내기
+                                    </button>
+                                    <button onClick={() => setIsFullScreen(true)} style={{display:'flex',alignItems:'center',gap:6,padding:'8px 14px',border:'1px solid #E4E0DC',borderRadius:8,background:'white',cursor:'pointer',fontSize:13,color:'#57534E',fontWeight:600}}>
+                                        <Maximize size={12}/> 전체보기
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {/* Tab Row - visible only when results exist */}
+                        {hasResults && (
+                            <div style={{display:'flex',gap:0,padding:'0 24px',overflowX:'auto'}}>
+                                {tabs.map(t => {
+                                    const isActive = activeTab === t;
+                                    const isDanger = t === '충돌';
+                                    const activeColor = isDanger ? '#F04E4E' : '#D4692A';
+                                    return (
+                                        <button key={t} onClick={() => handleTabChange(t)}
+                                            style={{
+                                                padding:'14px 24px', border:'none', cursor:'pointer',
+                                                background:'transparent',
+                                                borderBottom: isActive ? `3px solid ${activeColor}` : '3px solid transparent',
+                                                color: isActive ? (isDanger ? '#F04E4E' : '#1C1917') : '#9C9489',
+                                                fontWeight: isActive ? 700 : 500,
+                                                fontSize: 14,
+                                                display:'flex', alignItems:'center', gap:8,
+                                                transition:'all 0.15s',
+                                                whiteSpace:'nowrap',
+                                            }}>
+                                            {t}
+                                            {t !== '파이프라인' && <span style={{
+                                                background: isActive ? (isDanger ? '#FFF0F0' : '#FEF0DC') : '#F2EFEC',
+                                                color: isActive ? activeColor : '#9C9489',
+                                                padding:'2px 8px', borderRadius:20,
+                                                fontSize:12, fontWeight:700,
+                                            }}>{tabCounts[t]}</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        {/* Sub-tab Row - 선별결과 기능/비기능 필터 */}
+                        {hasResults && activeTab === '선별결과' && (
+                            <div style={{display:'flex',alignItems:'center',gap:6,padding:'8px 24px 0',background:'white',borderTop:'1px solid #F2EFEC'}}>
+                                <span style={{fontSize:10,fontWeight:700,color:'#C8BFB8',textTransform:'uppercase',letterSpacing:'0.1em',marginRight:4}}>분류</span>
+                                {[
+                                    { key: '전체', label: '전체', count: optimizedReqs.length },
+                                    { key: '기능',  label: '기능',  count: optimizedReqs.filter(r => r.요구사항유형분류?.분류 === '기능').length },
+                                    { key: '비기능', label: '비기능', count: optimizedReqs.filter(r => r.요구사항유형분류?.분류 === '비기능').length },
+                                ].map(s => {
+                                    const isActive = reqSubTab === s.key;
+                                    return (
+                                        <button key={s.key} onClick={() => setReqSubTab(s.key)}
+                                            style={{
+                                                display:'flex', alignItems:'center', gap:5,
+                                                padding:'5px 12px', border:'none', cursor:'pointer',
+                                                borderRadius:'6px 6px 0 0',
+                                                background: isActive ? '#FEF0DC' : 'transparent',
+                                                color: isActive ? '#D4692A' : '#9C9489',
+                                                fontWeight: isActive ? 700 : 500,
+                                                fontSize: 12,
+                                                transition:'all 0.15s',
+                                                borderBottom: isActive ? '2px solid #D4692A' : '2px solid transparent',
+                                            }}>
+                                            {s.label}
+                                            <span style={{
+                                                background: isActive ? 'rgba(212,105,42,0.15)' : '#F2EFEC',
+                                                color: isActive ? '#D4692A' : '#9C9489',
+                                                padding:'1px 6px', borderRadius:20,
+                                                fontSize:10, fontWeight:700,
+                                            }}>{s.count}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Content Area */}
+                    <div style={{flex:1,overflow:'auto',padding:'20px'}}>
+
+                        {/* ── LOADING STATE ── */}
+                        {isAnalyzing && (
+                            <div className="fade-up" style={{maxWidth:560,margin:'40px auto'}}>
+                                <div style={{background:'white',borderRadius:16,padding:28,border:'1px solid #E4E0DC'}} className="card-shadow-lg">
+                                    <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:24}}>
+                                        <Spinner size={20} className="" style={{color:'#D4692A'}}/>
+                                        <div>
+                                            <div style={{fontSize:15,fontWeight:700,color:'#1C1917'}}>AI 다중 에이전트 파이프라인</div>
+                                            <div style={{fontSize:12,color:'#9C9489',marginTop:2}}>Claude API · 3-Stage Processing</div>
+                                        </div>
+                                    </div>
+                                    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                                        {processingSteps.map((step, idx) => (
+                                            <div key={idx} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 14px',borderRadius:10,background:idx===progressStep?'#FEF9F5':idx<progressStep?'#FAFAF8':'transparent',border:`1px solid ${idx===progressStep?'#D4692A':idx<progressStep?'#E4E0DC':'transparent'}`,transition:'all 0.3s'}}>
+                                                <div className={`step-dot ${idx===progressStep?'step-active':idx<progressStep?'step-done':'step-pending'}`}>
+                                                    {idx < progressStep ? <Check size={12}/> : idx + 1}
+                                                </div>
+                                                <div>
+                                                    <div style={{fontSize:13,fontWeight:600,color:idx===progressStep?'#1C1917':idx<progressStep?'#57534E':'#C0C5D0'}}>{step.title}</div>
+                                                    <div style={{fontSize:11,color:idx===progressStep?'#57534E':'#C0C5D0',marginTop:1}}>{step.desc}</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── ERROR STATE ── */}
+                        {errorMessage && (
+                            <div className="fade-up" style={{maxWidth:600,margin:'40px auto'}}>
+                                <div style={{background:'white',borderRadius:16,overflow:'hidden',border:'1px solid #FDD'}} className="card-shadow">
+                                    <div style={{background:'#FFF5F5',padding:'20px 24px',borderBottom:'1px solid #FDD',display:'flex',alignItems:'center',gap:12}}>
+                                        <div style={{width:40,height:40,borderRadius:10,background:'#FEE',display:'flex',alignItems:'center',justifyContent:'center',color:'#F04E4E'}}>
+                                            <AlertTri size={20}/>
+                                        </div>
+                                        <div>
+                                            <div style={{fontSize:15,fontWeight:700,color:'#C03030'}}>파이프라인 실행 중단</div>
+                                            <div style={{fontSize:11,color:'#C06060',marginTop:1}}>Pipeline execution error</div>
+                                        </div>
+                                    </div>
+                                    <div style={{padding:20}}>
+                                        <div style={{background:'#FAFAF8',borderRadius:10,padding:16,fontFamily:'IBM Plex Mono',fontSize:12,color:'#C03030',lineHeight:1.7,whiteSpace:'pre-wrap'}}>{errorMessage}</div>
+                                        <button onClick={() => setErrorMessage(null)} style={{marginTop:16,padding:'10px 20px',border:'none',borderRadius:8,background:'#1C1917',color:'white',cursor:'pointer',fontSize:13,fontWeight:600}}>닫기 및 재가동</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── EMPTY STATE ── */}
+                        {!isAnalyzing && !metrics && !errorMessage && (
+                            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',minHeight:400,color:'#9C9489',textAlign:'center'}}>
+                                <div style={{width:72,height:72,borderRadius:20,background:'linear-gradient(135deg,#F2EFEC,#E4E0DC)',display:'flex',alignItems:'center',justifyContent:'center',marginBottom:20,color:'#C8BFB8'}}>
+                                    <Layers size={32}/>
+                                </div>
+                                <div style={{fontSize:17,fontWeight:700,color:'#292524',marginBottom:8}}>"요구사항이 흔들리면 프로젝트가 흔들립니다."</div>
+                                <div style={{fontSize:13,color:'#9C9489',lineHeight:1.7,maxWidth:400}}>왼쪽 패널에서 요구사항을 입력하거나 파일을 업로드한 뒤<br/>엔진을 가동해 주세요.</div>
+                                <div style={{marginTop:28,display:'flex',gap:8}}>
+                                    {['요구사항 추출','모호성 제거','충돌 탐지','HITL 의사결정'].map((f,i) => (
+                                        <div key={i} style={{padding:'6px 14px',background:'white',border:'1px solid #E4E0DC',borderRadius:20,fontSize:12,color:'#57534E',fontWeight:500}} className="card-shadow">{f}</div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── METRICS + ANALYSIS CARD ── */}
+                        {hasResults && (
+                            <div className="fade-up" style={{background:'white',borderRadius:12,border:'1px solid #E4E0DC',marginBottom:16,display:'flex',gap:0,overflow:'hidden'}} className="card-shadow">
+                                {/* 왼쪽: 3개 메트릭 */}
+                                <div style={{display:'flex',flexDirection:'column',gap:0,borderRight:'1px solid #E4E0DC',flexShrink:0,minWidth:280}}>
+                                    {[
+                                        {label:'요구사항 최적화', value:metrics.reduction_prediction, color:'#D4692A'},
+                                        {label:'모호성 보정',     value:`${metrics.ambiguity_resolved_count}건`, color:'#5B8DEF'},
+                                        {label:'정책 충돌',       value:`${metrics.conflict_req_count}건`,      color:'#F04E4E'},
+                                    ].map((m, i) => (
+                                        <div key={m.label} style={{padding:'14px 20px',borderBottom: i < 2 ? '1px solid #F2EFEC' : 'none',display:'flex',alignItems:'center',gap:14,borderLeft:`3px solid ${m.color}`}}>
+                                            <div style={{fontSize:24,fontWeight:800,color:m.color,letterSpacing:'-0.02em',lineHeight:1,flexShrink:0,minWidth:56}}>{m.value}</div>
+                                            <div style={{fontSize:11,fontWeight:600,color:'#9C9489'}}>{m.label}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                {/* 오른쪽: AI 분석 근거 */}
+                                <div style={{flex:1,padding:'16px 22px',display:'flex',flexDirection:'column',justifyContent:'center'}}>
+                                    <div style={{fontSize:10,fontWeight:700,color:'#D4692A',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:8}}>AI 분석 근거</div>
+                                    <div style={{fontSize:13,color:'#292524',lineHeight:1.85}}>{metrics.reduction_reason}</div>
+                                </div>
+                            </div>
+                        )}
+
+                        {hasResults && (
+                            <div className="fade-up" style={{background:'white',borderRadius:12,border:'1px solid #E4E0DC',overflow:'hidden'}} className="card-shadow">
+                                {/* Table content */}
+                                <div style={{maxHeight:'calc(100vh - 340px)',overflow:'auto'}}>
+                                    {activeTab==='UIUX 선별' && mergedRaw.length > 0 && <MergedRawTable/>}
+                                    {activeTab==='파이프라인' && <PipelineTab/>}
+                                    {activeTab==='선별결과' && optimizedReqs.length > 0 && (() => {
+                                        const filtered = reqSubTab === '전체' ? optimizedReqs : optimizedReqs.filter(r => r.요구사항유형분류?.분류 === reqSubTab);
+                                        return (
+                                        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12,minWidth:1600}}>
+                                            <thead style={{position:'sticky',top:0,background:'#F2EFEC',zIndex:10}}>
+                                                <tr>{['NO','업무분류','업무_대','기능_중','구성_소','요구정의명','상세내용 (구체화)','연관요구사항 / HITL','제약사항','요건_발생일','분류/유형','우선순위'].map(h => (
+                                                    <th key={h} style={{padding:'11px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'#9C9489',textTransform:'uppercase',letterSpacing:'0.08em',borderBottom:'2px solid #E4E0DC',whiteSpace:'nowrap'}}>{h}</th>
+                                                ))}</tr>
+                                            </thead>
+                                            <tbody>
+                                                {filtered.map((r,i) => (
+                                                    <tr key={i} className="req-row" style={{borderBottom:'1px solid #F2EFEC'}} onClick={() => setSelectedItem({type:'opt',data:r})}>
+                                                        <td style={{padding:'10px 14px',color:'#9C9489',fontSize:11,textAlign:'center'}}>{r.NO}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{r.업무분류}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{r.업무_대}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{r.기능_중}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11}}>{r.구성_소||'-'}</td>
+                                                        <td style={{padding:'10px 14px',fontWeight:600,color:'#292524',minWidth:180}}>{r.요구정의명}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',lineHeight:1.6,minWidth:260}}>{r.고객_요구사항_상세_내용}</td>
+                                                        <td style={{padding:'10px 14px',minWidth:180}}>
+                                                            <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
+                                                                {r.related_reqs?.map((rel,j) => <RelBadge key={j} rel={rel}/>)}
+                                                                {r.ambiguity_hitl?.is_ambiguous && (
+                                                                    <span className="badge badge-ambig"><AlertTri size={9}/> 모호성</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,minWidth:120}}>{r.제약사항||'-'}</td>
+                                                        <td style={{padding:'10px 14px',fontFamily:'IBM Plex Mono',color:'#9C9489',fontSize:10,whiteSpace:'nowrap'}}>{r.요건_발생일||'-'}</td>
+                                                        <td style={{padding:'10px 14px',color:'#57534E',fontSize:11,whiteSpace:'nowrap'}}>{r.요구사항유형분류?.분류||'-'}/{r.요구사항유형분류?.유형||'-'}</td>
+                                                        <td style={{padding:'10px 14px',whiteSpace:'nowrap'}}><span className={`priority-${r.우선순위}`}>{r.우선순위||'-'}</span></td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        );
+                                    })()}
+                                    {activeTab==='충돌' && conflicts.length > 0 && <ConflictsTable/>}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App/>);
+</script>
+</body>
+</html>
