@@ -59,6 +59,7 @@ const App = () => {
 
     const fileInputRef = useRef(null);
     const [showAmbiguityModal, setShowAmbiguityModal] = useState(false);
+    const [hoveredAmbiguity, setHoveredAmbiguity] = useState(null);
 
     const stepLabel = (v) => ({ 'STEP1통과': '직접 해당', 'STEP2복구': '간접 포함', 'STEP3확정': '심사 확정' }[v] || v || '-');
 
@@ -158,7 +159,9 @@ const App = () => {
                     "분류/유형": m ? `${m.요구사항유형분류?.분류||''}/${m.요구사항유형분류?.유형||''}` : '',
                     "요구사항명": raw.title, "상세내용": raw.detail,
                     "연관요구사항": m?.related_reqs?.map(r=>r.target_id).join(', ')||'',
-                    "우선순위": m?.우선순위||''
+                    "우선순위": m?.우선순위||'',
+                    "모호성_원문": m?.ambiguity_hitl?.original_text||'',
+                    "모호성_보정": m?.ambiguity_hitl?.corrected_text||''
                 };
             }));
             XLSX.utils.book_append_sheet(wb, ws1, "UIUX 선별");
@@ -525,6 +528,11 @@ STEP 3. 최종 판단 기준:
 - "최적화된 폼" → "입력 필드 자동완성, 실시간 유효성 검사"
 - "빠른 응답" → "API P95 응답 3초 이내"
 - 위 예시처럼 측정 가능한 기준으로 반드시 재서술할 것
+- 모호 표현 보정 시 반드시:
+  ambiguity_hitl.original_text: 원문 그대로
+  ambiguity_hitl.corrected_text: 보정된 구체적 표현
+  자동 보정 완료 → is_ambiguous: false, corrected_text 포함
+  보정 불가 → is_ambiguous: true, suggested_options 제시
 
 [데이터 무결성 규칙]
 1. 원본 ID 100% 그대로 추출, 임의 변경 금지
@@ -635,6 +643,7 @@ STEP 3. 최종 판단 기준:
         "is_ambiguous": false,
         "original_text": "원문 그대로 보존",
         "ambiguity_reason": "모호 사유",
+        "corrected_text": "AI가 자동 보정한 확정 텍스트",
         "suggested_options": ["정량 대안1", "정량 대안2"]
       }
     }
@@ -966,7 +975,28 @@ STEP 3. 최종 판단 기준:
                                                         <td className="p-4 font-bold text-primary border-r border-borderline min-w-[160px]">{raw.title}</td>
                                                         <td className="p-4 text-sub leading-relaxed border-r border-borderline min-w-[260px]">{raw.detail}</td>
                                                         <td className="p-4 border-r border-borderline min-w-[160px]">
-                                                            {m ? <>{renderBadges(m.related_reqs)}{m.ambiguity_hitl?.is_ambiguous && <div className="mt-2 inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent"><AlertTriangle size={10}/> 모호성 HITL</div>}</> : '-'}
+                                                            {m ? <>
+                                                                {renderBadges(m.related_reqs)}
+                                                                {m.ambiguity_hitl && (
+                                                                    <div className="relative mt-2 inline-block"
+                                                                        onMouseEnter={() => setHoveredAmbiguity(`main-${i}`)}
+                                                                        onMouseLeave={() => setHoveredAmbiguity(null)}>
+                                                                        {m.ambiguity_hitl.is_ambiguous
+                                                                            ? <div className="inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent cursor-help"><AlertTriangle size={10}/> 모호성 HITL</div>
+                                                                            : <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-300 cursor-help"><CheckCircle size={10}/> 보정완료</div>
+                                                                        }
+                                                                        {hoveredAmbiguity === `main-${i}` && (
+                                                                            <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-borderline rounded-lg shadow-lg p-3 w-72 text-xs">
+                                                                                <div className="mb-2"><span className="text-[10px] font-bold text-sub uppercase">원문</span><p className="text-sub mt-1 leading-relaxed">{m.ambiguity_hitl.original_text || '-'}</p></div>
+                                                                                {m.ambiguity_hitl.is_ambiguous
+                                                                                    ? <div><span className="text-[10px] font-bold text-accent uppercase">대안</span>{m.ambiguity_hitl.suggested_options?.map((o,j) => <p key={j} className="text-primary mt-1">· {o}</p>)}</div>
+                                                                                    : <div><span className="text-[10px] font-bold text-green-600 uppercase">보정</span><p className="text-green-700 mt-1 leading-relaxed font-bold">{m.ambiguity_hitl.corrected_text || '-'}</p></div>
+                                                                                }
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            </> : '-'}
                                                         </td>
                                                         <td className="p-4 font-bold">{m?.우선순위||'-'}</td>
                                                     </tr>);
@@ -1225,7 +1255,28 @@ STEP 3. 최종 판단 기준:
                                                 <td className="p-4 font-bold text-primary border-r border-borderline">{raw.title}</td>
                                                 <td className="p-4 text-sub leading-relaxed border-r border-borderline">{raw.detail}</td>
                                                 <td className="p-4 border-r border-borderline">
-                                                    {m ? <>{renderBadges(m.related_reqs)}{m.ambiguity_hitl?.is_ambiguous && <div className="mt-2 inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent"><AlertTriangle size={10}/> 모호성 HITL</div>}</> : '-'}
+                                                    {m ? <>
+                                                        {renderBadges(m.related_reqs)}
+                                                        {m.ambiguity_hitl && (
+                                                            <div className="relative mt-2 inline-block"
+                                                                onMouseEnter={() => setHoveredAmbiguity(`fs-${i}`)}
+                                                                onMouseLeave={() => setHoveredAmbiguity(null)}>
+                                                                {m.ambiguity_hitl.is_ambiguous
+                                                                    ? <div className="inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent cursor-help"><AlertTriangle size={10}/> 모호성 HITL</div>
+                                                                    : <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-300 cursor-help"><CheckCircle size={10}/> 보정완료</div>
+                                                                }
+                                                                {hoveredAmbiguity === `fs-${i}` && (
+                                                                    <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-borderline rounded-lg shadow-lg p-3 w-72 text-xs">
+                                                                        <div className="mb-2"><span className="text-[10px] font-bold text-sub uppercase">원문</span><p className="text-sub mt-1 leading-relaxed">{m.ambiguity_hitl.original_text || '-'}</p></div>
+                                                                        {m.ambiguity_hitl.is_ambiguous
+                                                                            ? <div><span className="text-[10px] font-bold text-accent uppercase">대안</span>{m.ambiguity_hitl.suggested_options?.map((o,j) => <p key={j} className="text-primary mt-1">· {o}</p>)}</div>
+                                                                            : <div><span className="text-[10px] font-bold text-green-600 uppercase">보정</span><p className="text-green-700 mt-1 leading-relaxed font-bold">{m.ambiguity_hitl.corrected_text || '-'}</p></div>
+                                                                        }
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </> : '-'}
                                                 </td>
                                                 <td className="p-4 font-bold text-accent">{m?.우선순위||'-'}</td>
                                             </tr>);
