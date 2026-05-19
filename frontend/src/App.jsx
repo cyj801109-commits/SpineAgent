@@ -49,7 +49,7 @@ const App = () => {
     const [truncationWarning, setTruncationWarning] = useState(null);
 
     // Tab State
-    const [activeTab, setActiveTab] = useState('요구사항정의서');
+    const [activeTab, setActiveTab] = useState('UIUX 선별');
     const [selectedItem, setSelectedItem] = useState(null);
     const [isFullScreen, setIsFullScreen] = useState(false);
 
@@ -147,80 +147,44 @@ const App = () => {
     const exportToExcel = () => {
         const wb = XLSX.utils.book_new();
 
-        if (optimizedReqs.length > 0) {
-            const optData = optimizedReqs.map(r => ({
-                "NO": r.NO,
-                "원본 요구사항ID": r.원본ID || '',
-                "요구사항ID": r.요구사항ID,
-                "FO/BO": r.fo_bo || 'TBD',
-                "범위": r.review_role || '',
-                "화면본수": r.화면본수 || 'TBD',
-                "판단단계": r.uiux_relevance_step || '',
-                "업무분류": r.업무분류,
-                "업무_대": r.업무_대,
-                "기능_중": r.기능_중,
-                "구성_소": r.구성_소,
-                "요구정의명": r.요구정의명,
-                "고객_요구사항_상세_내용": r.고객_요구사항_상세_내용,
-                "연관 요구사항 및 HITL 근거": r.related_reqs?.map(rel => `[${rel.relation_type}] ${rel.target_id}`).join(', ') || '',
-                "제약사항": r.제약사항 || '',
-                "요건_발생일": r.요건_발생일,
-                "분류": r.요구사항유형분류?.분류 || '',
-                "유형": r.요구사항유형분류?.유형 || '',
-                "우선순위": r.우선순위,
-                "모호성여부": r.ambiguity_hitl?.is_ambiguous ? 'O' : 'X',
-                "모호사유": r.ambiguity_hitl?.ambiguity_reason || '',
-                "모호원문": r.ambiguity_hitl?.original_text || '',
-                "개선대안": r.ambiguity_hitl?.suggested_options?.join('; ') || ''
+        // ① UIUX 선별 시트 — 웹뷰와 동일 컬럼
+        const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
+        if (merged.length > 0) {
+            const ws1 = XLSX.utils.json_to_sheet(merged.map(raw => {
+                const m = optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === raw.id));
+                return {
+                    "원본ID": raw.id, "유형": raw.type, "요구사항명": raw.title, "상세내용": raw.detail,
+                    "업무분류": m?.업무분류||'', "업무_대": m?.업무_대||'', "기능_중": m?.기능_중||'', "구성_소": m?.구성_소||'',
+                    "요구정의명": m?.요구정의명||'', "상세내용(구체화)": m?.고객_요구사항_상세_내용||'',
+                    "연관요구사항": m?.related_reqs?.map(r=>`[${r.relation_type}] ${r.target_id}`).join(', ')||'',
+                    "제약사항": m?.제약사항||'', "발생일": m?.요건_발생일||'',
+                    "분류/유형": m ? `${m.요구사항유형분류?.분류||''}/${m.요구사항유형분류?.유형||''}` : '',
+                    "우선순위": m?.우선순위||''
+                };
             }));
-            const wsOpt = XLSX.utils.json_to_sheet(optData);
-            XLSX.utils.book_append_sheet(wb, wsOpt, "요구사항정의서");
+            XLSX.utils.book_append_sheet(wb, ws1, "UIUX 선별");
         }
 
-        // 요약 정보 시트
-        if (metrics) {
-            const summaryData = [{
-                "전체입력": metrics.total_input_count,
-                "UIUX선별": metrics.uiux_selected_count,
-                "제외": metrics.excluded_count,
-                "모호성보정": metrics.ambiguity_resolved_count,
-                "정책충돌": metrics.conflict_req_count || 0,
-                "선별근거": metrics.selection_reason || ''
-            }];
-            const wsSummary = XLSX.utils.json_to_sheet(summaryData);
-            XLSX.utils.book_append_sheet(wb, wsSummary, "요약");
-        }
-
-
+        // ② 충돌 시트
         if (conflicts.length > 0) {
-            const wsConflicts = XLSX.utils.json_to_sheet(conflicts.map(c => ({"충돌 ID": c.conflict_id, "관련 요구사항": c.involved_req_ids?.join(', '), "충돌 사유": c.conflict_reason, "추천안": c.recommendation || '', "영향범위": c.impact_scope || ''})));
-            XLSX.utils.book_append_sheet(wb, wsConflicts, "충돌");
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conflicts.map(c => ({
+                "충돌ID": c.conflict_id, "관련ID": c.involved_req_ids?.join(', '), "충돌사유": c.conflict_reason
+            }))), "충돌");
         }
 
-        {
-            const prData = prerequisiteRelations.length > 0
-                ? prerequisiteRelations.map(p => ({"관계ID": p.relation_id, "선행요구사항": p.prerequisite_id, "후행요구사항": p.dependent_ids?.join(', ') || '', "사유": p.reason || ''}))
-                : [{"관계ID": '', "선행요구사항": '', "후행요구사항": '', "사유": ''}];
-            const wsPR = XLSX.utils.json_to_sheet(prData, { skipHeader: false });
-            if (prerequisiteRelations.length === 0) XLSX.utils.sheet_add_aoa(wsPR, [], { origin: 'A2' });
-            XLSX.utils.book_append_sheet(wb, wsPR, "전제조건관계");
+        // ③ 파이프라인 시트
+        if (processingSteps.length > 0) {
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(processingSteps.map((s, i) => ({
+                "단계": i + 1, "처리명": s.title, "설명": s.desc
+            }))), "파이프라인");
         }
 
-        {
-            const srData = similarReqs.length > 0
-                ? similarReqs.map(s => ({"관계ID": s.relation_id, "유사요구사항": s.req_ids?.join(', ') || '', "유사내용": s.similarity_summary || '', "조치": s.action || ''}))
-                : [{"관계ID": '', "유사요구사항": '', "유사내용": '', "조치": ''}];
-            const wsSR = XLSX.utils.json_to_sheet(srData, { skipHeader: false });
-            if (similarReqs.length === 0) XLSX.utils.sheet_add_aoa(wsSR, [], { origin: 'A2' });
-            XLSX.utils.book_append_sheet(wb, wsSR, "유사요구사항");
-        }
-
-        if(wb.SheetNames.length === 0) {
+        if (wb.SheetNames.length === 0) {
             alert("추출할 분석 데이터가 없습니다.");
             return;
         }
 
-        XLSX.writeFile(wb, "요구사항정의서_결과.xlsx");
+        XLSX.writeFile(wb, "UIUX선별_SPINE.xlsx");
     };
 
     // HITL에서 PM이 채택/수정한 값을 실시간 요구사항정의서(optimizedReqs)에 반영
@@ -745,7 +709,7 @@ STEP 3. 최종 판단 기준:
             }
             setProgressStep(7);
 
-            setActiveTab('요구사항정의서');
+            setActiveTab('UIUX 선별');
         } catch (e) {
             setErrorMessage(`[Step ${progressStep + 1} 실패] ${e.message}`);
         } finally {
@@ -915,8 +879,8 @@ STEP 3. 최종 판단 기준:
                     <div className="flex flex-col flex-1 min-h-[400px] relative w-full min-w-0">
                         {!isAnalyzing && metrics && !errorMessage && (
                             <div className="flex gap-0 px-2 shrink-0 overflow-x-auto text-primary z-20 relative">
-                                {['UIUX 선별', '제외 항목', '요구사항정의서', '충돌', '파이프라인'].map(tab => {
-                                    const count = tab === 'UIUX 선별' ? rawFunc.length : tab === '제외 항목' ? rawNonFunc.length : tab === '요구사항정의서' ? optimizedReqs.length : tab === '충돌' ? conflicts.length + prerequisiteRelations.length + similarReqs.length : null;
+                                {['UIUX 선별', '충돌', '파이프라인'].map(tab => {
+                                    const count = tab === 'UIUX 선별' ? rawFunc.length + rawNonFunc.length : tab === '충돌' ? conflicts.length + prerequisiteRelations.length + similarReqs.length : null;
                                     return (
                                     <button key={tab}
                                             onClick={() => setActiveTab(tab)}
@@ -984,49 +948,54 @@ STEP 3. 최종 판단 기준:
                                         </div>
                                     )}
 
-                                    {!isAnalyzing && !errorMessage && (activeTab === 'UIUX 선별' || activeTab === '제외 항목') && (activeTab === 'UIUX 선별' ? rawFunc.length > 0 : rawNonFunc.length > 0) && renderRawTable(activeTab === 'UIUX 선별' ? rawFunc : rawNonFunc, activeTab === '제외 항목')}
-
-                                    {!isAnalyzing && !errorMessage && activeTab === '요구사항정의서' && optimizedReqs.length > 0 && (
-                                        <table className="w-full text-left text-xs border-collapse min-w-[1200px] bg-white text-primary">
+                                    {!isAnalyzing && !errorMessage && activeTab === 'UIUX 선별' && (rawFunc.length > 0 || rawNonFunc.length > 0) && (() => {
+                                        const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
+                                        return (
+                                        <table className="w-full text-left text-xs border-collapse min-w-[2000px] bg-white text-primary">
                                             <thead className="sticky top-0 bg-pagebg text-[11px] uppercase tracking-widest text-sub border-b border-borderline z-10 font-bold">
                                                 <tr>
-                                                    <th className="p-4 w-12 text-center border-r border-borderline">NO</th>
-                                                    <th className="p-4 w-36 border-r border-borderline">요구사항ID</th>
-                                                    <th className="p-4 border-r border-borderline">FO/BO</th>
-                                                    <th className="p-4 border-r border-borderline">화면본수</th>
-                                                    <th className="p-4 border-r border-borderline">판단단계</th>
-                                                    <th className="p-4 border-r border-borderline">범위</th>
-                                                    <th className="p-4 w-20 border-r border-borderline">업무분류</th>
-                                                    <th className="p-4 w-24 border-r border-borderline">업무_대</th>
-                                                    <th className="p-4 w-24 border-r border-borderline">기능_중</th>
-                                                    <th className="p-4 border-r border-borderline w-48 text-primary">요구정의명</th>
-                                                    <th className="p-4 border-r border-borderline">상세내용 (구체화)</th>
-                                                    <th className="p-4 w-40 text-center">연관 요구사항 / HITL</th>
+                                                    <th className="p-4 border-r border-borderline">원본ID</th>
+                                                    <th className="p-4 border-r border-borderline">유형</th>
+                                                    <th className="p-4 border-r border-borderline">요구사항명</th>
+                                                    <th className="p-4 border-r border-borderline">상세내용</th>
+                                                    <th className="p-4 border-r border-borderline">업무분류</th>
+                                                    <th className="p-4 border-r border-borderline">업무_대</th>
+                                                    <th className="p-4 border-r border-borderline">기능_중</th>
+                                                    <th className="p-4 border-r border-borderline">구성_소</th>
+                                                    <th className="p-4 border-r border-borderline">요구정의명</th>
+                                                    <th className="p-4 border-r border-borderline">상세내용(구체화)</th>
+                                                    <th className="p-4 border-r border-borderline">연관요구사항/HITL</th>
+                                                    <th className="p-4 border-r border-borderline">제약사항</th>
+                                                    <th className="p-4 border-r border-borderline">발생일</th>
+                                                    <th className="p-4 border-r border-borderline">분류/유형</th>
+                                                    <th className="p-4">우선순위</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-borderline">
-                                                {optimizedReqs.map((r, i) => (
-                                                    <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => setSelectedItem({type: 'opt', data: r})}>
-                                                        <td className="p-4 text-center text-sub border-r border-borderline">{r.NO}</td>
-                                                        <td className="p-4 font-bold text-primary tracking-wider border-r border-borderline">{r.요구사항ID}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{r.fo_bo || 'TBD'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{r.화면본수 || 'TBD'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline text-[10px]">{stepLabel(r.uiux_relevance_step)}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline text-[10px]">{r.review_role || '-'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{r.업무분류}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{r.업무_대}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{r.기능_중}</td>
-                                                        <td className="p-4 font-bold text-primary group-hover:text-accent transition-colors border-r border-borderline">{r.요구정의명}</td>
-                                                        <td className="p-4 text-primary leading-relaxed border-r border-borderline">{r.고객_요구사항_상세_내용}</td>
-                                                        <td className="p-4 text-center">
-                                                            {renderBadges(r.related_reqs)}
-                                                            {r.ambiguity_hitl?.is_ambiguous && <div className="mt-2 inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent"><AlertTriangle size={10}/> 모호성 HITL</div>}
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                {merged.map((raw, i) => {
+                                                    const m = optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === raw.id));
+                                                    return (
+                                                    <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => m && setSelectedItem({type:'opt',data:m})}>
+                                                        <td className="p-4 font-mono font-bold text-accent border-r border-borderline text-[11px]">{raw.id}</td>
+                                                        <td className="p-4 border-r border-borderline"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${raw.type==='기능'?'bg-amber-100 text-amber-800':'bg-orange-100 text-orange-800'}`}>{raw.type}</span></td>
+                                                        <td className="p-4 font-bold text-primary border-r border-borderline min-w-[160px]">{raw.title}</td>
+                                                        <td className="p-4 text-sub leading-relaxed border-r border-borderline min-w-[200px]">{raw.detail}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m?.업무분류||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m?.업무_대||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m?.기능_중||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m?.구성_소||'-'}</td>
+                                                        <td className="p-4 font-bold text-primary group-hover:text-accent border-r border-borderline min-w-[180px]">{m?.요구정의명||'-'}</td>
+                                                        <td className="p-4 text-primary leading-relaxed border-r border-borderline min-w-[260px]">{m?.고객_요구사항_상세_내용||'-'}</td>
+                                                        <td className="p-4 border-r border-borderline min-w-[160px]">{m ? renderBadges(m.related_reqs) : '-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m?.제약사항||'-'}</td>
+                                                        <td className="p-4 text-sub font-mono text-[10px] border-r border-borderline">{m?.요건_발생일||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m ? `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}` : '-'}</td>
+                                                        <td className="p-4 font-bold">{m?.우선순위||'-'}</td>
+                                                    </tr>);
+                                                })}
                                             </tbody>
-                                        </table>
-                                    )}
+                                        </table>);
+                                    })()}
 
                                     {!isAnalyzing && !errorMessage && activeTab === '충돌' && (
                                         <div>
@@ -1240,71 +1209,66 @@ STEP 3. 최종 판단 기준:
                                 </div>
                             </div>
                             <div className="flex gap-0 relative z-20">
-                                {['UIUX 선별', '제외 항목', '요구사항정의서', '충돌', '파이프라인'].map(tab => (
+                                {['UIUX 선별', '충돌', '파이프라인'].map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-btn px-8 py-3 rounded-t text-sm font-bold transition-all ${activeTab === tab ? (tab === '충돌' ? 'tab-conflict-active' : 'tab-active') : 'tab-inactive'}`}>{tab}</button>
                                 ))}
                             </div>
                         </div>
                         <div className="flex-1 overflow-auto p-6 bg-pagebg z-10">
-                            {activeTab === '요구사항정의서' ? (
+                            {activeTab === 'UIUX 선별' ? (() => {
+                                const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
+                                return (
                                 <table className="w-full text-left text-[11px] border-collapse min-w-[2400px] shadow-sm rounded border border-borderline bg-white">
                                     <thead className="bg-pagebg text-sub sticky top-0 z-10 text-[11px] uppercase tracking-widest font-bold">
                                         <tr>
-                                            <th className="p-4 w-12 text-center border-r border-borderline">NO</th>
-                                            <th className="p-4 w-40 border-r border-borderline">요구사항ID</th>
-                                            <th className="p-4 border-r border-borderline">FO/BO</th>
-                                            <th className="p-4 border-r border-borderline">화면본수</th>
-                                            <th className="p-4 border-r border-borderline">판단단계</th>
-                                            <th className="p-4 border-r border-borderline">범위</th>
+                                            <th className="p-4 border-r border-borderline">원본ID</th>
+                                            <th className="p-4 border-r border-borderline">유형</th>
+                                            <th className="p-4 border-r border-borderline min-w-[160px]">요구사항명</th>
+                                            <th className="p-4 border-r border-borderline min-w-[200px]">상세내용</th>
                                             <th className="p-4 border-r border-borderline">업무분류</th>
                                             <th className="p-4 border-r border-borderline">업무_대</th>
                                             <th className="p-4 border-r border-borderline">기능_중</th>
                                             <th className="p-4 border-r border-borderline">구성_소</th>
-                                            <th className="p-4 min-w-[200px] border-r border-borderline">요구정의명</th>
-                                            <th className="p-4 border-r border-borderline min-w-[400px]">고객_요구사항_상세_내용</th>
-                                            <th className="p-4 border-r border-borderline min-w-[200px]">연관 요구사항 및 HITL 근거</th>
-                                            <th className="p-4 border-r border-borderline min-w-[150px]">제약사항</th>
-                                            <th className="p-4 border-r border-borderline">요건_발생일</th>
-                                            <th className="p-4 border-r border-borderline text-center">분류/유형</th>
-                                            <th className="p-4 text-center">우선순위</th>
+                                            <th className="p-4 border-r border-borderline min-w-[200px]">요구정의명</th>
+                                            <th className="p-4 border-r border-borderline min-w-[400px]">상세내용(구체화)</th>
+                                            <th className="p-4 border-r border-borderline min-w-[200px]">연관요구사항/HITL</th>
+                                            <th className="p-4 border-r border-borderline">제약사항</th>
+                                            <th className="p-4 border-r border-borderline">발생일</th>
+                                            <th className="p-4 border-r border-borderline">분류/유형</th>
+                                            <th className="p-4">우선순위</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-borderline font-normal text-primary">
-                                        {optimizedReqs.map((r, i) => (
-                                            <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all duration-200" onClick={() => { setSelectedItem({type: 'opt', data: r}); }}>
-                                                <td className="p-4 text-center text-sub border-r border-borderline">{r.NO}</td>
-                                                <td className="p-4 font-bold text-primary border-r border-borderline tracking-wider">{r.요구사항ID}</td>
-                                                <td className="p-4 border-r border-borderline">{r.fo_bo || 'TBD'}</td>
-                                                <td className="p-4 border-r border-borderline">{r.화면본수 || 'TBD'}</td>
-                                                <td className="p-4 border-r border-borderline text-[10px] text-sub">{stepLabel(r.uiux_relevance_step)}</td>
-                                                <td className="p-4 border-r border-borderline text-[10px] text-sub">{r.review_role || '-'}</td>
-                                                <td className="p-4 border-r border-borderline">{r.업무분류}</td>
-                                                <td className="p-4 border-r border-borderline">{r.업무_대}</td>
-                                                <td className="p-4 border-r border-borderline">{r.기능_중}</td>
-                                                <td className="p-4 border-r border-borderline">{r.구성_소}</td>
-                                                <td className="p-4 font-bold text-primary border-r border-borderline leading-tight">{r.요구정의명}</td>
-                                                <td className="p-4 leading-relaxed border-r border-borderline">{r.고객_요구사항_상세_내용}</td>
-                                                <td className="p-4 border-r border-borderline">
-                                                    {r.related_reqs?.map((rel, idx) => (
-                                                        <div key={idx} className="mb-1 text-[11px]"><span className="text-sub font-bold">[{rel.relation_type}]</span> {rel.target_id}</div>
-                                                    ))}
-                                                </td>
-                                                <td className="p-4 text-primary border-r border-borderline">{r.제약사항 || '-'}</td>
-                                                <td className="p-4 font-mono text-sub border-r border-borderline">{r.요건_발생일}</td>
-                                                <td className="p-4 text-center border-r border-borderline">{r.요구사항유형분류?.분류}/{r.요구사항유형분류?.유형}</td>
-                                                <td className="p-4 text-center font-bold text-accent">{r.우선순위}</td>
-                                            </tr>
-                                        ))}
+                                        {merged.map((raw, i) => {
+                                            const m = optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === raw.id));
+                                            return (
+                                            <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all" onClick={() => m && setSelectedItem({type:'opt',data:m})}>
+                                                <td className="p-4 font-mono font-bold text-accent border-r border-borderline">{raw.id}</td>
+                                                <td className="p-4 border-r border-borderline"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${raw.type==='기능'?'bg-amber-100 text-amber-800':'bg-orange-100 text-orange-800'}`}>{raw.type}</span></td>
+                                                <td className="p-4 font-bold text-primary border-r border-borderline">{raw.title}</td>
+                                                <td className="p-4 text-sub leading-relaxed border-r border-borderline">{raw.detail}</td>
+                                                <td className="p-4 border-r border-borderline">{m?.업무분류||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m?.업무_대||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m?.기능_중||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m?.구성_소||'-'}</td>
+                                                <td className="p-4 font-bold text-primary border-r border-borderline">{m?.요구정의명||'-'}</td>
+                                                <td className="p-4 leading-relaxed border-r border-borderline">{m?.고객_요구사항_상세_내용||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m?.related_reqs?.map((rel,j)=><div key={j} className="mb-1 text-[11px]"><span className="text-sub font-bold">[{rel.relation_type}]</span> {rel.target_id}</div>)||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m?.제약사항||'-'}</td>
+                                                <td className="p-4 font-mono text-sub border-r border-borderline">{m?.요건_발생일||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m?`${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`:'-'}</td>
+                                                <td className="p-4 font-bold text-accent">{m?.우선순위||'-'}</td>
+                                            </tr>);
+                                        })}
                                     </tbody>
-                                </table>
-                            ) : (
-                                activeTab === '파이프라인' ? (
+                                </table>);
+                            })()
+                            : activeTab === '파이프라인' ? (
                                 <PipelineInfoView />
                             ) : (
                                 <div className="rounded border border-borderline shadow-sm bg-white">
-                                    {activeTab === '충돌' ? renderConflictsTable() : renderRawTable(activeTab === 'UIUX 선별' ? rawFunc : rawNonFunc, activeTab === '제외 항목')}
+                                    {renderConflictsTable()}
                                 </div>
-                            )
                             )}
                         </div>
                     </div>
