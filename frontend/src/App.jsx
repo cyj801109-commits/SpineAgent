@@ -153,12 +153,11 @@ const App = () => {
             const ws1 = XLSX.utils.json_to_sheet(merged.map(raw => {
                 const m = optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === raw.id));
                 return {
-                    "원본ID": raw.id, "유형": raw.type, "요구사항명": raw.title, "상세내용": raw.detail,
+                    "원본ID": raw.id,
                     "업무분류": m?.업무분류||'', "업무_대": m?.업무_대||'', "기능_중": m?.기능_중||'', "구성_소": m?.구성_소||'',
-                    "요구정의명": m?.요구정의명||'', "상세내용(구체화)": m?.고객_요구사항_상세_내용||'',
-                    "연관요구사항": m?.related_reqs?.map(r=>`[${r.relation_type}] ${r.target_id}`).join(', ')||'',
-                    "제약사항": m?.제약사항||'', "발생일": m?.요건_발생일||'',
                     "분류/유형": m ? `${m.요구사항유형분류?.분류||''}/${m.요구사항유형분류?.유형||''}` : '',
+                    "요구사항명": raw.title, "상세내용": raw.detail,
+                    "연관요구사항": m?.related_reqs?.map(r=>r.target_id).join(', ')||'',
                     "우선순위": m?.우선순위||''
                 };
             }));
@@ -192,13 +191,9 @@ const App = () => {
         if (hitlType === 'conflict') {
             setConflicts(prev => prev.filter(c => c.conflict_id !== item.conflict_id));
             const newDecisionReq = {
-                NO: optimizedReqs.length + 1,
-                요구사항ID: `REQ-HITL-${String(optimizedReqs.length + 1).padStart(3, '0')}`,
                 업무분류: "의사결정", 업무_대: "정책확정", 기능_중: "HITL", 구성_소: "충돌해결",
                 요구정의명: `[확정] ${item.conflict_reason.substring(0, 20)}...`,
                 고객_요구사항_상세_내용: `PM 의사결정으로 정책 확정: ${selectedOption}`,
-                제약사항: `관련 요건: ${item.involved_req_ids.join(', ')}`,
-                요건_발생일: new Date().toISOString().split('T')[0],
                 요구사항유형분류: { 분류: "기능", 유형: "정책" },
                 우선순위: "상",
                 related_reqs: item.involved_req_ids.map(id => ({ target_id: id, relation_type: "통합", reason: "충돌 해결 및 단일화" }))
@@ -621,21 +616,12 @@ STEP 3. 최종 판단 기준:
   },
   "optimized_requirements": [
     {
-      "NO": 1,
-      "원본ID": "원본 문서에서의 요구사항 ID (변경 없이 그대로)",
-      "요구사항ID": "REQ-FO-USR-01-001",
-      "fo_bo": "FO/BO/TBD",
-      "review_role": "직접담당/협의필요/인지필요",
-      "화면본수": "1본/TBD",
       "업무분류": "대분류",
       "업무_대": "업무명",
       "기능_중": "기능명",
       "구성_소": "상세구성",
       "요구정의명": "명확한 기능명",
       "고객_요구사항_상세_내용": "모호성 제거된 구체적 요건",
-      "uiux_relevance_step": "STEP1통과/STEP2복구/STEP3확정",
-      "제약사항": "제약사항 또는 Re-scope 사유",
-      "요건_발생일": "YYYY-MM-DD",
       "요구사항유형분류": { "분류": "기능/비기능", "유형": "세부유형" },
       "우선순위": "상/중/하",
       "related_reqs": [
@@ -951,23 +937,18 @@ STEP 3. 최종 판단 기준:
                                     {!isAnalyzing && !errorMessage && activeTab === 'UIUX 선별' && (rawFunc.length > 0 || rawNonFunc.length > 0) && (() => {
                                         const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
                                         return (
-                                        <table className="w-full text-left text-xs border-collapse min-w-[2000px] bg-white text-primary">
+                                        <table className="w-full text-left text-xs border-collapse min-w-[1400px] bg-white text-primary">
                                             <thead className="sticky top-0 bg-pagebg text-[11px] uppercase tracking-widest text-sub border-b border-borderline z-10 font-bold">
                                                 <tr>
                                                     <th className="p-4 border-r border-borderline">원본ID</th>
-                                                    <th className="p-4 border-r border-borderline">유형</th>
-                                                    <th className="p-4 border-r border-borderline">요구사항명</th>
-                                                    <th className="p-4 border-r border-borderline">상세내용</th>
                                                     <th className="p-4 border-r border-borderline">업무분류</th>
                                                     <th className="p-4 border-r border-borderline">업무_대</th>
                                                     <th className="p-4 border-r border-borderline">기능_중</th>
                                                     <th className="p-4 border-r border-borderline">구성_소</th>
-                                                    <th className="p-4 border-r border-borderline">요구정의명</th>
-                                                    <th className="p-4 border-r border-borderline">상세내용(구체화)</th>
-                                                    <th className="p-4 border-r border-borderline">연관요구사항/HITL</th>
-                                                    <th className="p-4 border-r border-borderline">제약사항</th>
-                                                    <th className="p-4 border-r border-borderline">발생일</th>
                                                     <th className="p-4 border-r border-borderline">분류/유형</th>
+                                                    <th className="p-4 border-r border-borderline">요구사항명</th>
+                                                    <th className="p-4 border-r border-borderline">상세내용</th>
+                                                    <th className="p-4 border-r border-borderline">연관요구사항/HITL</th>
                                                     <th className="p-4">우선순위</th>
                                                 </tr>
                                             </thead>
@@ -977,19 +958,16 @@ STEP 3. 최종 판단 기준:
                                                     return (
                                                     <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => m && setSelectedItem({type:'opt',data:m})}>
                                                         <td className="p-4 font-mono font-bold text-accent border-r border-borderline text-[11px]">{raw.id}</td>
-                                                        <td className="p-4 border-r border-borderline"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${raw.type==='기능'?'bg-amber-100 text-amber-800':'bg-orange-100 text-orange-800'}`}>{raw.type}</span></td>
-                                                        <td className="p-4 font-bold text-primary border-r border-borderline min-w-[160px]">{raw.title}</td>
-                                                        <td className="p-4 text-sub leading-relaxed border-r border-borderline min-w-[200px]">{raw.detail}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{m?.업무분류||'-'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{m?.업무_대||'-'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{m?.기능_중||'-'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{m?.구성_소||'-'}</td>
-                                                        <td className="p-4 font-bold text-primary group-hover:text-accent border-r border-borderline min-w-[180px]">{m?.요구정의명||'-'}</td>
-                                                        <td className="p-4 text-primary leading-relaxed border-r border-borderline min-w-[260px]">{m?.고객_요구사항_상세_내용||'-'}</td>
-                                                        <td className="p-4 border-r border-borderline min-w-[160px]">{m ? renderBadges(m.related_reqs) : '-'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{m?.제약사항||'-'}</td>
-                                                        <td className="p-4 text-sub font-mono text-[10px] border-r border-borderline">{m?.요건_발생일||'-'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{m ? `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}` : '-'}</td>
+                                                        <td className="p-4 font-bold text-primary border-r border-borderline min-w-[160px]">{raw.title}</td>
+                                                        <td className="p-4 text-sub leading-relaxed border-r border-borderline min-w-[260px]">{raw.detail}</td>
+                                                        <td className="p-4 border-r border-borderline min-w-[160px]">
+                                                            {m ? <>{renderBadges(m.related_reqs)}{m.ambiguity_hitl?.is_ambiguous && <div className="mt-2 inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent"><AlertTriangle size={10}/> 모호성 HITL</div>}</> : '-'}
+                                                        </td>
                                                         <td className="p-4 font-bold">{m?.우선순위||'-'}</td>
                                                     </tr>);
                                                 })}
@@ -1218,23 +1196,18 @@ STEP 3. 최종 판단 기준:
                             {activeTab === 'UIUX 선별' ? (() => {
                                 const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
                                 return (
-                                <table className="w-full text-left text-[11px] border-collapse min-w-[2400px] shadow-sm rounded border border-borderline bg-white">
+                                <table className="w-full text-left text-[11px] border-collapse min-w-[1400px] shadow-sm rounded border border-borderline bg-white">
                                     <thead className="bg-pagebg text-sub sticky top-0 z-10 text-[11px] uppercase tracking-widest font-bold">
                                         <tr>
                                             <th className="p-4 border-r border-borderline">원본ID</th>
-                                            <th className="p-4 border-r border-borderline">유형</th>
-                                            <th className="p-4 border-r border-borderline min-w-[160px]">요구사항명</th>
-                                            <th className="p-4 border-r border-borderline min-w-[200px]">상세내용</th>
                                             <th className="p-4 border-r border-borderline">업무분류</th>
                                             <th className="p-4 border-r border-borderline">업무_대</th>
                                             <th className="p-4 border-r border-borderline">기능_중</th>
                                             <th className="p-4 border-r border-borderline">구성_소</th>
-                                            <th className="p-4 border-r border-borderline min-w-[200px]">요구정의명</th>
-                                            <th className="p-4 border-r border-borderline min-w-[400px]">상세내용(구체화)</th>
-                                            <th className="p-4 border-r border-borderline min-w-[200px]">연관요구사항/HITL</th>
-                                            <th className="p-4 border-r border-borderline">제약사항</th>
-                                            <th className="p-4 border-r border-borderline">발생일</th>
                                             <th className="p-4 border-r border-borderline">분류/유형</th>
+                                            <th className="p-4 border-r border-borderline min-w-[160px]">요구사항명</th>
+                                            <th className="p-4 border-r border-borderline min-w-[260px]">상세내용</th>
+                                            <th className="p-4 border-r border-borderline min-w-[160px]">연관요구사항/HITL</th>
                                             <th className="p-4">우선순위</th>
                                         </tr>
                                     </thead>
@@ -1244,19 +1217,16 @@ STEP 3. 최종 판단 기준:
                                             return (
                                             <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all" onClick={() => m && setSelectedItem({type:'opt',data:m})}>
                                                 <td className="p-4 font-mono font-bold text-accent border-r border-borderline">{raw.id}</td>
-                                                <td className="p-4 border-r border-borderline"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${raw.type==='기능'?'bg-amber-100 text-amber-800':'bg-orange-100 text-orange-800'}`}>{raw.type}</span></td>
-                                                <td className="p-4 font-bold text-primary border-r border-borderline">{raw.title}</td>
-                                                <td className="p-4 text-sub leading-relaxed border-r border-borderline">{raw.detail}</td>
                                                 <td className="p-4 border-r border-borderline">{m?.업무분류||'-'}</td>
                                                 <td className="p-4 border-r border-borderline">{m?.업무_대||'-'}</td>
                                                 <td className="p-4 border-r border-borderline">{m?.기능_중||'-'}</td>
                                                 <td className="p-4 border-r border-borderline">{m?.구성_소||'-'}</td>
-                                                <td className="p-4 font-bold text-primary border-r border-borderline">{m?.요구정의명||'-'}</td>
-                                                <td className="p-4 leading-relaxed border-r border-borderline">{m?.고객_요구사항_상세_내용||'-'}</td>
-                                                <td className="p-4 border-r border-borderline">{m?.related_reqs?.map((rel,j)=><div key={j} className="mb-1 text-[11px]"><span className="text-sub font-bold">[{rel.relation_type}]</span> {rel.target_id}</div>)||'-'}</td>
-                                                <td className="p-4 border-r border-borderline">{m?.제약사항||'-'}</td>
-                                                <td className="p-4 font-mono text-sub border-r border-borderline">{m?.요건_발생일||'-'}</td>
                                                 <td className="p-4 border-r border-borderline">{m?`${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`:'-'}</td>
+                                                <td className="p-4 font-bold text-primary border-r border-borderline">{raw.title}</td>
+                                                <td className="p-4 text-sub leading-relaxed border-r border-borderline">{raw.detail}</td>
+                                                <td className="p-4 border-r border-borderline">
+                                                    {m ? <>{renderBadges(m.related_reqs)}{m.ambiguity_hitl?.is_ambiguous && <div className="mt-2 inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent"><AlertTriangle size={10}/> 모호성 HITL</div>}</> : '-'}
+                                                </td>
                                                 <td className="p-4 font-bold text-accent">{m?.우선순위||'-'}</td>
                                             </tr>);
                                         })}
