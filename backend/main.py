@@ -5,7 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig, Part
-import base64, json, re, os, tempfile
+import base64, json, re, os, tempfile, asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 from pathlib import Path
 
@@ -68,16 +69,23 @@ async def analyze(req: AnalyzeRequest):
                 )
         content_parts.append(full_prompt)
 
-        response = model.generate_content(
-            content_parts,
-            generation_config=GenerationConfig(
-                response_mime_type="application/json",
-                temperature=0.2,
-                top_p=0.6,
-                top_k=40,
-                max_output_tokens=65536,
+        _executor = ThreadPoolExecutor(max_workers=1)
+        loop = asyncio.get_event_loop()
+        response = await asyncio.wait_for(
+            loop.run_in_executor(
+                _executor,
+                lambda: model.generate_content(
+                    content_parts,
+                    generation_config=GenerationConfig(
+                        response_mime_type="application/json",
+                        temperature=0.2,
+                        top_p=0.6,
+                        top_k=40,
+                        max_output_tokens=65536,
+                    ),
+                ),
             ),
-            request_options={"timeout": 110},
+            timeout=110,
         )
         text = response.text
         match = re.search(r'\{.*\}', text, re.DOTALL)
@@ -89,6 +97,8 @@ async def analyze(req: AnalyzeRequest):
         return {"text": match.group(0)}
     except HTTPException:
         raise
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="AI 응답 시간이 110초를 초과했습니다.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
