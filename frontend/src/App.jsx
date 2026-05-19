@@ -202,13 +202,21 @@ const App = () => {
             XLSX.utils.book_append_sheet(wb, wsConflicts, "충돌");
         }
 
-        if (prerequisiteRelations.length > 0) {
-            const wsPR = XLSX.utils.json_to_sheet(prerequisiteRelations.map(p => ({"관계ID": p.relation_id, "선행요구사항": p.prerequisite_id, "후행요구사항": p.dependent_ids?.join(', ') || '', "사유": p.reason || ''})));
+        {
+            const prData = prerequisiteRelations.length > 0
+                ? prerequisiteRelations.map(p => ({"관계ID": p.relation_id, "선행요구사항": p.prerequisite_id, "후행요구사항": p.dependent_ids?.join(', ') || '', "사유": p.reason || ''}))
+                : [{"관계ID": '', "선행요구사항": '', "후행요구사항": '', "사유": ''}];
+            const wsPR = XLSX.utils.json_to_sheet(prData, { skipHeader: false });
+            if (prerequisiteRelations.length === 0) XLSX.utils.sheet_add_aoa(wsPR, [], { origin: 'A2' });
             XLSX.utils.book_append_sheet(wb, wsPR, "전제조건관계");
         }
 
-        if (similarReqs.length > 0) {
-            const wsSR = XLSX.utils.json_to_sheet(similarReqs.map(s => ({"관계ID": s.relation_id, "유사요구사항": s.req_ids?.join(', ') || '', "유사내용": s.similarity_summary || '', "조치": s.action || ''})));
+        {
+            const srData = similarReqs.length > 0
+                ? similarReqs.map(s => ({"관계ID": s.relation_id, "유사요구사항": s.req_ids?.join(', ') || '', "유사내용": s.similarity_summary || '', "조치": s.action || ''}))
+                : [{"관계ID": '', "유사요구사항": '', "유사내용": '', "조치": ''}];
+            const wsSR = XLSX.utils.json_to_sheet(srData, { skipHeader: false });
+            if (similarReqs.length === 0) XLSX.utils.sheet_add_aoa(wsSR, [], { origin: 'A2' });
             XLSX.utils.book_append_sheet(wb, wsSR, "유사요구사항");
         }
 
