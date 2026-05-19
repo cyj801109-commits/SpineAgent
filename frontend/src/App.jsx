@@ -147,6 +147,7 @@ const App = () => {
         if (optimizedReqs.length > 0) {
             const optData = optimizedReqs.map(r => ({
                 "NO": r.NO,
+                "원본 요구사항ID": r.원본ID || '',
                 "요구사항ID": r.요구사항ID,
                 "FO/BO": r.fo_bo || 'TBD',
                 "범위": r.review_role || '',
@@ -187,15 +188,6 @@ const App = () => {
             XLSX.utils.book_append_sheet(wb, wsSummary, "요약");
         }
 
-        if (rawFunc.length > 0) {
-            const wsFunc = XLSX.utils.json_to_sheet(rawFunc.map(r => ({"원본 ID": r.id, "요구사항명": r.title, "상세내용": r.detail})));
-            XLSX.utils.book_append_sheet(wb, wsFunc, "기능");
-        }
-
-        if (rawNonFunc.length > 0) {
-            const wsNonFunc = XLSX.utils.json_to_sheet(rawNonFunc.map(r => ({"원본 ID": r.id, "요구사항명": r.title, "상세내용": r.detail, "제외사유": r.exclude_reason || ''})));
-            XLSX.utils.book_append_sheet(wb, wsNonFunc, "비기능");
-        }
 
         if (conflicts.length > 0) {
             const wsConflicts = XLSX.utils.json_to_sheet(conflicts.map(c => ({"충돌 ID": c.conflict_id, "관련 요구사항": c.involved_req_ids?.join(', '), "충돌 사유": c.conflict_reason, "추천안": c.recommendation || '', "영향범위": c.impact_scope || ''})));
@@ -663,6 +655,7 @@ STEP 3. 최종 판단 기준:
   "optimized_requirements": [
     {
       "NO": 1,
+      "원본ID": "원본 문서에서의 요구사항 ID (변경 없이 그대로)",
       "요구사항ID": "REQ-FO-USR-01-001",
       "fo_bo": "FO/BO/TBD",
       "review_role": "직접담당/협의필요/인지필요",
