@@ -84,15 +84,28 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
   <div class="zone-label">입력 (Input)</div>
   <div class="input-row">
     <div class="chip"><span class="dot dot-pdf"></span>PDF 문서 (base64 binary)</div>
-    <div class="chip"><span class="dot dot-xls"></span>Excel / CSV (텍스트 추출, 최대 300행)</div>
+    <div class="chip"><span class="dot dot-xls"></span>Excel / CSV (코드 직접 파싱, 최대 300행 · STEP 01 skip)</div>
     <div class="chip"><span class="dot dot-txt"></span>텍스트 직접 입력</div>
   </div>
-  <div class="note">combinedText 생성 → 80,000자 상한 적용 → /api/analyze 전송</div>
+
+  <!-- 분기 흐름 -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 4px;">
+    <div style="background:#EAF3DE;border:1px solid #C0DD97;border-radius:8px;padding:14px 16px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#3B6D11;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;">경로 A · Excel / CSV</div>
+      <div style="font-size:12px;color:#57534E;line-height:1.6;">parseExcelToRequirements() 코드 직접 파싱<br>→ 헤더 자동 매핑 (요구사항 ID, 업무(대), 기능(중), 구성(소))<br>→ <strong style="color:#3B6D11;">STEP 01 LLM 건너뜀</strong> → STEP 02 직행</div>
+      <div style="margin-top:8px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#3B6D11;">temperature 무관 · 결정론적 · 매 실행 동일 결과</div>
+    </div>
+    <div style="background:#FAECE7;border:1px solid #F5C4B3;border-radius:8px;padding:14px 16px;">
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#993C1D;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;">경로 B · PDF / 텍스트</div>
+      <div style="font-size:12px;color:#57534E;line-height:1.6;">combinedText 생성 → 80,000자 상한 적용<br>→ 15,000자 단위 자동 청킹<br>→ <strong style="color:#993C1D;">STEP 01 LLM 호출</strong> → STEP 02</div>
+      <div style="margin-top:8px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#993C1D;">temperature=0 · top_k=1 · greedy decoding</div>
+    </div>
+  </div>
 
   <div class="conn">
     <div class="conn-line"></div>
     <div class="conn-tip"></div>
-    <div class="conn-note">prompt + systemInstruction + schema → Vertex AI</div>
+    <div class="conn-note">경로 B만 해당: prompt + systemInstruction + schema → Vertex AI</div>
   </div>
 
   <!-- STEP 01 -->
@@ -101,6 +114,7 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
       <span class="step-pill">STEP 01</span>
       <span class="card-title">추출 에이전트 (Intake)</span>
       <span class="badge badge-ai">AI Agent</span>
+      <span class="badge" style="background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;">Excel 시 skip</span>
       <span class="expand-icon" id="ic1">[ 펼치기 ]</span>
     </div>
     <div class="card-body">
@@ -111,19 +125,20 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
         </div>
         <div class="cell">
           <div class="cell-label">입력</div>
-          <div class="mono">combinedText<br>(PDF binary + 텍스트)</div>
+          <div class="mono">PDF / 텍스트 입력 전용<br>Excel/CSV는 코드 파싱으로 대체</div>
           <div class="warn-tag">&#9888; 131,072 토큰 상한</div>
         </div>
         <div class="cell">
           <div class="cell-label">출력 스키마</div>
-          <div class="mono">raw_functional_reqs[ ]<br>raw_non_functional_reqs[ ]</div>
-          <div class="tags"><span class="tag">id</span><span class="tag">title</span><span class="tag">detail</span></div>
+          <div class="mono">uiux_functional_reqs[ ]<br>excluded_reqs[ ]</div>
+          <div class="tags"><span class="tag">id</span><span class="tag">title</span><span class="tag">detail</span><span class="tag">우선순위</span><span class="tag">업무분류</span><span class="tag">ambiguity_hitl</span></div>
         </div>
         <div class="cell">
           <div class="cell-label">프롬프트 규칙</div>
           <div class="cell-val">데이터 무결성 절대 준수 · ID 조작 금지 · 스키마 엄수 · 순수 JSON 반환 · 최대 3회 retry</div>
         </div>
       </div>
+      <div class="note" style="margin-top:10px;">코드 후처리: filterNonUiuxItems() ID 접두사 블랙리스트 필터 + getBusinessCategory() 업무분류 결정</div>
     </div>
   </div>
 
