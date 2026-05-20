@@ -196,7 +196,7 @@ const App = () => {
         // ① UIUX 선별 시트 — optimizedReqs 기반 (Task 2 결과)
         if (optimizedReqs.length > 0) {
             const ws1 = XLSX.utils.json_to_sheet(optimizedReqs.map(m => ({
-                "원본ID": m.related_reqs?.map(r=>r.target_id).join(', ')||'-',
+                "원본ID": m.원본_ids || m.related_reqs?.map(r=>r.target_id).join(', ')||'-',
                 "업무분류": m.업무분류||'-', "업무_대": m.업무_대||'-', "기능_중": m.기능_중||'-', "구성_소": m.구성_소||'-',
                 "분류/유형": `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`,
                 "요구정의명": m.요구정의명||'-', "상세내용": m.고객_요구사항_상세_내용||'-',
@@ -598,9 +598,12 @@ STEP 3. 최종 판단 기준:
    컬럼명은 "고유번호", "요구사항ID", "고유ID", "번호" 등 RFP마다 다를 수 있다.
    해당 컬럼을 문서에서 스스로 찾아서, 그 값을 원본ID로 그대로 사용할 것.
    절대 임의로 생성, 변환, 채번하지 말 것.
-2. 물리적 행 순서 유지, 임의 정렬 금지
-3. JSON 스키마 외 텍스트 추가 금지
-4. 상세내용은 핵심만 간결하게 요약하여 출력 제한 방지
+2. optimized_requirements의 각 항목에는 반드시 원본_ids 필드를 채울 것.
+   원본_ids: 이 항목이 파생/통합된 원본 요구사항 ID를 쉼표 구분으로 기입.
+   related_reqs도 반드시 1개 이상 포함하고 target_id를 채울 것. 빈 배열 금지.
+3. 물리적 행 순서 유지, 임의 정렬 금지
+4. JSON 스키마 외 텍스트 추가 금지
+5. 상세내용은 핵심만 간결하게 요약하여 출력 제한 방지
 
 [review_role 판단 기준]
 - 직접담당: 업무분류가 UI/UX이거나 UIUX 기획자가 화면 설계서를 직접 작성하는 항목
@@ -698,6 +701,7 @@ STEP 3. 최종 판단 기준:
   },
   "optimized_requirements": [
     {
+      "원본_ids": "이 항목의 원본 요구사항 ID (쉼표 구분, 반드시 1개 이상 채울 것)",
       "업무분류": "대분류",
       "업무_대": "업무명",
       "기능_중": "기능명",
@@ -1036,7 +1040,7 @@ STEP 3. 최종 판단 기준:
                                             </thead>
                                             <tbody className="divide-y divide-borderline">
                                                 {optimizedReqs.map((m, i) => {
-                                                    const relIds = m.related_reqs?.map(r => r.target_id).join(', ') || '';
+                                                    const relIds = m.원본_ids || m.related_reqs?.map(r => r.target_id).join(', ') || '';
                                                     return (
                                                     <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => setSelectedItem({type:'opt',data:m})}>
                                                         <td className="p-4 font-mono font-bold text-accent border-r border-borderline text-[11px]">{relIds || '-'}</td>
@@ -1313,7 +1317,7 @@ STEP 3. 최종 판단 기준:
                                     </thead>
                                     <tbody className="divide-y divide-borderline font-normal text-primary">
                                         {optimizedReqs.map((m, i) => {
-                                            const relIds = m.related_reqs?.map(r => r.target_id).join(', ') || '';
+                                            const relIds = m.원본_ids || m.related_reqs?.map(r => r.target_id).join(', ') || '';
                                             return (
                                             <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all" onClick={() => setSelectedItem({type:'opt',data:m})}>
                                                 <td className="p-4 font-mono font-bold text-accent border-r border-borderline">{relIds || '-'}</td>
@@ -1355,8 +1359,41 @@ STEP 3. 최종 판단 기준:
                             : activeTab === '파이프라인' ? (
                                 <PipelineInfoView />
                             ) : (
-                                <div className="rounded border border-borderline shadow-sm bg-white">
-                                    {renderConflictsTable()}
+                                <div>
+                                    {conflicts.length > 0 && <div className="rounded border border-borderline shadow-sm bg-white">{renderConflictsTable()}</div>}
+                                    {prerequisiteRelations.length > 0 && (
+                                        <div className="mt-6">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-sub mb-3 px-4 border-l-4 border-accent pl-2">전제조건 관계</h3>
+                                            <table className="w-full text-left text-xs border-collapse bg-white text-primary rounded border border-borderline shadow-sm">
+                                                <thead className="bg-pagebg text-[11px] uppercase tracking-widest text-sub border-b border-borderline font-bold">
+                                                    <tr><th className="p-4 border-r border-borderline">관계 ID</th><th className="p-4 border-r border-borderline">선행 요구사항</th><th className="p-4 border-r border-borderline">후행 요구사항</th><th className="p-4">사유</th></tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-borderline">
+                                                    {prerequisiteRelations.map((p, i) => (
+                                                        <tr key={i} className="hover:bg-pagebg"><td className="p-4 font-mono font-bold border-r border-borderline">{p.relation_id}</td><td className="p-4 font-mono border-r border-borderline">{p.prerequisite_id}</td><td className="p-4 font-mono border-r border-borderline">{p.dependent_ids?.join(', ')}</td><td className="p-4 text-sub">{p.reason}</td></tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                    {similarReqs.length > 0 && (
+                                        <div className="mt-6">
+                                            <h3 className="text-xs font-bold uppercase tracking-widest text-sub mb-3 px-4 border-l-4 border-blue-400 pl-2">유사 요구사항</h3>
+                                            <table className="w-full text-left text-xs border-collapse bg-white text-primary rounded border border-borderline shadow-sm">
+                                                <thead className="bg-pagebg text-[11px] uppercase tracking-widest text-sub border-b border-borderline font-bold">
+                                                    <tr><th className="p-4 border-r border-borderline">관계 ID</th><th className="p-4 border-r border-borderline">유사 요구사항</th><th className="p-4 border-r border-borderline">유사 내용</th><th className="p-4">조치</th></tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-borderline">
+                                                    {similarReqs.map((s, i) => (
+                                                        <tr key={i} className="hover:bg-pagebg"><td className="p-4 font-mono font-bold border-r border-borderline">{s.relation_id}</td><td className="p-4 font-mono border-r border-borderline">{s.req_ids?.join(', ')}</td><td className="p-4 border-r border-borderline">{s.similarity_summary}</td><td className="p-4 text-sub">{s.action}</td></tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                    {conflicts.length === 0 && prerequisiteRelations.length === 0 && similarReqs.length === 0 && (
+                                        <div className="p-8 text-center text-sub">관계 분석 결과가 없습니다.</div>
+                                    )}
                                 </div>
                             )}
                         </div>
