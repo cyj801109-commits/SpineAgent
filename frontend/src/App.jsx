@@ -193,24 +193,20 @@ const App = () => {
     const exportToExcel = () => {
         const wb = XLSX.utils.book_new();
 
-        // ① UIUX 선별 시트 — 웹뷰와 동일 컬럼
-        const merged = [...rawFunc.map(r=>({...r,type:'기능'}))]; // rawNonFunc·rawExcluded는 제외 항목이므로 미표시
-        if (merged.length > 0) {
-            const ws1 = XLSX.utils.json_to_sheet(merged.map(raw => {
-                const m = findMatchedOpt(raw, optimizedReqs);
-                return {
-                    "원본ID": raw.id,
-                    "업무분류": m?.업무분류||'-', "업무_대": m?.업무_대||'-', "기능_중": m?.기능_중||'-', "구성_소": m?.구성_소||'-',
-                    "분류/유형": m ? `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}` : '-',
-                    "요구사항명": raw.title, "상세내용": raw.detail,
-                    "연관요구사항": m?.related_reqs?.map(r=>r.target_id).join(', ')||'-',
-                    "우선순위": m?.우선순위||'-',
-                    "모호성_상태": m?.ambiguity_hitl?.is_ambiguous ? '검토필요' : (m?.ambiguity_hitl?.corrected_text && m?.ambiguity_hitl?.original_text !== m?.ambiguity_hitl?.corrected_text) ? '자동보정' : '-',
-                    "모호성_원문": m?.ambiguity_hitl?.original_text||'-',
-                    "모호성_보정": m?.ambiguity_hitl?.corrected_text||'-',
-                    "모호성_사유": m?.ambiguity_hitl?.ambiguity_reason||'-'
-                };
-            }));
+        // ① UIUX 선별 시트 — optimizedReqs 기반 (Task 2 결과)
+        if (optimizedReqs.length > 0) {
+            const ws1 = XLSX.utils.json_to_sheet(optimizedReqs.map(m => ({
+                "원본ID": m.related_reqs?.map(r=>r.target_id).join(', ')||'-',
+                "업무분류": m.업무분류||'-', "업무_대": m.업무_대||'-', "기능_중": m.기능_중||'-', "구성_소": m.구성_소||'-',
+                "분류/유형": `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`,
+                "요구정의명": m.요구정의명||'-', "상세내용": m.고객_요구사항_상세_내용||'-',
+                "연관요구사항": m.related_reqs?.map(r=>`${r.target_id}(${r.relation_type})`).join(', ')||'-',
+                "우선순위": m.우선순위||'-',
+                "모호성_상태": m.ambiguity_hitl?.is_ambiguous ? '검토필요' : (m.ambiguity_hitl?.corrected_text && m.ambiguity_hitl?.original_text !== m.ambiguity_hitl?.corrected_text) ? '자동보정' : '-',
+                "모호성_원문": m.ambiguity_hitl?.original_text||'-',
+                "모호성_보정": m.ambiguity_hitl?.corrected_text||'-',
+                "모호성_사유": m.ambiguity_hitl?.ambiguity_reason||'-'
+            })));
             XLSX.utils.book_append_sheet(wb, ws1, "UIUX 선별");
         }
 
@@ -532,22 +528,24 @@ const App = () => {
 RFP 및 요구사항 문서에서 UIUX 관련 항목을 선별하고 기획자 언어로 구체화하는 전문가임.
 
 [UIUX 관련성 판단 3단계 로직 — 반드시 준수]
-STEP 1. Out of Scope 판단: 아래 항목은 UIUX 범위 외로 1차 제외한다.
-- PM 영역: 디자인시스템 정의, WBS, 일정, 예산
-- 컴플라이언스: 개인정보처리방침, 보안정책
-- 인프라: 서버 튜닝, 수수료 계산, 배치
-- 데이터 아키텍처: DB 설계, 데이터 표준화, 데이터 모델링, 데이터 스키마·메타 정의,
-  ETL 개발·운영, 데이터 수집·연계·마이그레이션·품질검증, 데이터 아키텍처 설계
-  ※ 단, 해당 항목이 "화면에서 어떻게 보여줄지(시각화 방식, 컴포넌트 구조)"를 포함하는 경우는
-  STEP 2에서 복구 가능
-- ID 접두사 기반 제외: 아래 접두사로 시작하는 요구사항은 UIUX 소관이 아니므로
-  반드시 excluded_reqs에 포함할 것. 본문 내용과 무관하게 ID만으로 제외한다.
+
+★ 핵심 원칙: REQ- 접두사 항목은 STEP 1에서 절대 제외하지 않는다.
+  REQ- 항목은 반드시 STEP 2, STEP 3까지 검토한 뒤 최종 판단한다.
+  의심스러우면 제외하지 말고 uiux_functional_reqs에 포함시킨다.
+
+STEP 1. Out of Scope 판단 (비-REQ 접두사 항목에만 적용):
+- ID 접두사 기반 제외: 아래 접두사로 시작하는 요구사항만 1차 제외 대상이다.
   DAR(데이터아키텍처), TER(테스트), SER(보안), INR(인프라),
   QUR(품질), PER(성능), SFR(SW기능), ECR(변경관리)
+  단, 이 항목도 STEP 2 복구 키워드를 포함하면 복구 가능.
+- REQ- 접두사 항목 중 아래 내용만 포함한 경우에도 제외하지 않고 STEP 3까지 검토:
+  PM 영역(WBS, 일정, 예산), 컴플라이언스(보안정책), 인프라(서버 튜닝, 배치),
+  데이터 아키텍처(DB 설계, ETL, 마이그레이션)
 
 STEP 2. Context Recovery: STEP 1 제외 항목이라도 아래 UI 키워드 포함 시
 'Conditional'로 분류하여 STEP 3에서 재판단한다.
-- 복구 키워드: 화면, 조회UI, 노출, 버튼, 클릭, 팝업, 모달, 입력폼, 레이아웃
+- 복구 키워드: 화면, 조회UI, 노출, 버튼, 클릭, 팝업, 모달, 입력폼, 레이아웃,
+  대시보드, 위젯, 메뉴, 탭, 검색, 필터, 정렬, 페이징, 알림, 토스트
 
 STEP 3. 최종 판단 기준:
 "UIUX 기획자가 이 항목을 위해 화면 설계서(와이어프레임·스토리보드)를 직접 작성해야 하는가?"
@@ -951,7 +949,7 @@ STEP 3. 최종 판단 기준:
                         {!isAnalyzing && metrics && !errorMessage && (
                             <div className="flex gap-0 px-2 shrink-0 overflow-x-auto text-primary z-20 relative">
                                 {['UIUX 선별', '충돌', '파이프라인'].map(tab => {
-                                    const count = tab === 'UIUX 선별' ? rawFunc.length : tab === '충돌' ? conflicts.length + prerequisiteRelations.length + similarReqs.length : null;
+                                    const count = tab === 'UIUX 선별' ? optimizedReqs.length : tab === '충돌' ? conflicts.length + prerequisiteRelations.length + similarReqs.length : null;
                                     return (
                                     <button key={tab}
                                             onClick={() => setActiveTab(tab)}
@@ -1019,8 +1017,7 @@ STEP 3. 최종 판단 기준:
                                         </div>
                                     )}
 
-                                    {!isAnalyzing && !errorMessage && activeTab === 'UIUX 선별' && (rawFunc.length > 0) && (() => {
-                                        const merged = [...rawFunc.map(r=>({...r,type:'기능'}))]; // rawNonFunc·rawExcluded는 제외 항목이므로 미표시
+                                    {!isAnalyzing && !errorMessage && activeTab === 'UIUX 선별' && (optimizedReqs.length > 0) && (() => {
                                         return (
                                         <table className="w-full text-left text-xs border-collapse min-w-[1400px] bg-white text-primary">
                                             <thead className="sticky top-0 bg-pagebg text-[11px] uppercase tracking-widest text-sub border-b border-borderline z-10 font-bold">
@@ -1031,50 +1028,48 @@ STEP 3. 최종 판단 기준:
                                                     <th className="p-4 border-r border-borderline">기능_중</th>
                                                     <th className="p-4 border-r border-borderline">구성_소</th>
                                                     <th className="p-4 border-r border-borderline">분류/유형</th>
-                                                    <th className="p-4 border-r border-borderline">요구사항명</th>
+                                                    <th className="p-4 border-r border-borderline">요구정의명</th>
                                                     <th className="p-4 border-r border-borderline">상세내용</th>
                                                     <th className="p-4 border-r border-borderline">연관요구사항/HITL</th>
                                                     <th className="p-4">우선순위</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-borderline">
-                                                {merged.map((raw, i) => {
-                                                    const m = findMatchedOpt(raw, optimizedReqs);
+                                                {optimizedReqs.map((m, i) => {
+                                                    const relIds = m.related_reqs?.map(r => r.target_id).join(', ') || '';
                                                     return (
-                                                    <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => m && setSelectedItem({type:'opt',data:m})}>
-                                                        <td className="p-4 font-mono font-bold text-accent border-r border-borderline text-[11px]">{raw.id}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{m?.업무분류||'-'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{m?.업무_대||'-'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{m?.기능_중||'-'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{m?.구성_소||'-'}</td>
-                                                        <td className="p-4 text-sub border-r border-borderline">{m ? `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}` : '-'}</td>
-                                                        <td className="p-4 font-bold text-primary border-r border-borderline min-w-[160px]">{raw.title}</td>
-                                                        <td className="p-4 text-sub leading-relaxed border-r border-borderline min-w-[260px]">{raw.detail}</td>
+                                                    <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => setSelectedItem({type:'opt',data:m})}>
+                                                        <td className="p-4 font-mono font-bold text-accent border-r border-borderline text-[11px]">{relIds || '-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m.업무분류||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m.업무_대||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m.기능_중||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m.구성_소||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{`${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`}</td>
+                                                        <td className="p-4 font-bold text-primary border-r border-borderline min-w-[160px]">{m.요구정의명||'-'}</td>
+                                                        <td className="p-4 text-sub leading-relaxed border-r border-borderline min-w-[260px]">{m.고객_요구사항_상세_내용||'-'}</td>
                                                         <td className="p-4 border-r border-borderline min-w-[160px]">
-                                                            {m ? <>
-                                                                {renderBadges(m.related_reqs)}
-                                                                {m.ambiguity_hitl && (
-                                                                    <div className="relative mt-2 inline-block"
-                                                                        onMouseEnter={() => setHoveredAmbiguity(`main-${i}`)}
-                                                                        onMouseLeave={() => setHoveredAmbiguity(null)}>
-                                                                        {m.ambiguity_hitl.is_ambiguous
-                                                                            ? <div className="inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent cursor-help"><AlertTriangle size={10}/> 모호성 HITL</div>
-                                                                            : <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-300 cursor-help"><CheckCircle size={10}/> 보정완료</div>
-                                                                        }
-                                                                        {hoveredAmbiguity === `main-${i}` && (
-                                                                            <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-borderline rounded-lg shadow-lg p-3 w-72 text-xs">
-                                                                                <div className="mb-2"><span className="text-[10px] font-bold text-sub uppercase">원문</span><p className="text-sub mt-1 leading-relaxed">{m.ambiguity_hitl.original_text || '-'}</p></div>
-                                                                                {m.ambiguity_hitl.is_ambiguous
-                                                                                    ? <div><span className="text-[10px] font-bold text-accent uppercase">대안</span>{m.ambiguity_hitl.suggested_options?.map((o,j) => <p key={j} className="text-primary mt-1">· {o}</p>)}</div>
-                                                                                    : <div><span className="text-[10px] font-bold text-green-600 uppercase">보정</span><p className="text-green-700 mt-1 leading-relaxed font-bold">{m.ambiguity_hitl.corrected_text || '-'}</p></div>
-                                                                                }
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </> : '-'}
+                                                            {renderBadges(m.related_reqs)}
+                                                            {m.ambiguity_hitl && (
+                                                                <div className="relative mt-2 inline-block"
+                                                                    onMouseEnter={() => setHoveredAmbiguity(`main-${i}`)}
+                                                                    onMouseLeave={() => setHoveredAmbiguity(null)}>
+                                                                    {m.ambiguity_hitl.is_ambiguous
+                                                                        ? <div className="inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent cursor-help"><AlertTriangle size={10}/> 모호성 HITL</div>
+                                                                        : <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-300 cursor-help"><CheckCircle size={10}/> 보정완료</div>
+                                                                    }
+                                                                    {hoveredAmbiguity === `main-${i}` && (
+                                                                        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-borderline rounded-lg shadow-lg p-3 w-72 text-xs">
+                                                                            <div className="mb-2"><span className="text-[10px] font-bold text-sub uppercase">원문</span><p className="text-sub mt-1 leading-relaxed">{m.ambiguity_hitl.original_text || '-'}</p></div>
+                                                                            {m.ambiguity_hitl.is_ambiguous
+                                                                                ? <div><span className="text-[10px] font-bold text-accent uppercase">대안</span>{m.ambiguity_hitl.suggested_options?.map((o,j) => <p key={j} className="text-primary mt-1">· {o}</p>)}</div>
+                                                                                : <div><span className="text-[10px] font-bold text-green-600 uppercase">보정</span><p className="text-green-700 mt-1 leading-relaxed font-bold">{m.ambiguity_hitl.corrected_text || '-'}</p></div>
+                                                                            }
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                         </td>
-                                                        <td className="p-4 font-bold">{m?.우선순위||'-'}</td>
+                                                        <td className="p-4 font-bold">{m.우선순위||'-'}</td>
                                                     </tr>);
                                                 })}
                                             </tbody>
@@ -1300,7 +1295,6 @@ STEP 3. 최종 판단 기준:
                         </div>
                         <div className="flex-1 overflow-auto p-6 bg-pagebg z-10">
                             {activeTab === 'UIUX 선별' ? (() => {
-                                const merged = [...rawFunc.map(r=>({...r,type:'기능'}))]; // rawNonFunc·rawExcluded는 제외 항목이므로 미표시
                                 return (
                                 <table className="w-full text-left text-[11px] border-collapse min-w-[1400px] shadow-sm rounded border border-borderline bg-white">
                                     <thead className="bg-pagebg text-sub sticky top-0 z-10 text-[11px] uppercase tracking-widest font-bold">
@@ -1311,50 +1305,48 @@ STEP 3. 최종 판단 기준:
                                             <th className="p-4 border-r border-borderline">기능_중</th>
                                             <th className="p-4 border-r border-borderline">구성_소</th>
                                             <th className="p-4 border-r border-borderline">분류/유형</th>
-                                            <th className="p-4 border-r border-borderline min-w-[160px]">요구사항명</th>
+                                            <th className="p-4 border-r border-borderline min-w-[160px]">요구정의명</th>
                                             <th className="p-4 border-r border-borderline min-w-[260px]">상세내용</th>
                                             <th className="p-4 border-r border-borderline min-w-[160px]">연관요구사항/HITL</th>
                                             <th className="p-4">우선순위</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-borderline font-normal text-primary">
-                                        {merged.map((raw, i) => {
-                                            const m = findMatchedOpt(raw, optimizedReqs);
+                                        {optimizedReqs.map((m, i) => {
+                                            const relIds = m.related_reqs?.map(r => r.target_id).join(', ') || '';
                                             return (
-                                            <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all" onClick={() => m && setSelectedItem({type:'opt',data:m})}>
-                                                <td className="p-4 font-mono font-bold text-accent border-r border-borderline">{raw.id}</td>
-                                                <td className="p-4 border-r border-borderline">{m?.업무분류||'-'}</td>
-                                                <td className="p-4 border-r border-borderline">{m?.업무_대||'-'}</td>
-                                                <td className="p-4 border-r border-borderline">{m?.기능_중||'-'}</td>
-                                                <td className="p-4 border-r border-borderline">{m?.구성_소||'-'}</td>
-                                                <td className="p-4 border-r border-borderline">{m?`${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`:'-'}</td>
-                                                <td className="p-4 font-bold text-primary border-r border-borderline">{raw.title}</td>
-                                                <td className="p-4 text-sub leading-relaxed border-r border-borderline">{raw.detail}</td>
+                                            <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all" onClick={() => setSelectedItem({type:'opt',data:m})}>
+                                                <td className="p-4 font-mono font-bold text-accent border-r border-borderline">{relIds || '-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m.업무분류||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m.업무_대||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m.기능_중||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m.구성_소||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{`${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`}</td>
+                                                <td className="p-4 font-bold text-primary border-r border-borderline">{m.요구정의명||'-'}</td>
+                                                <td className="p-4 text-sub leading-relaxed border-r border-borderline">{m.고객_요구사항_상세_내용||'-'}</td>
                                                 <td className="p-4 border-r border-borderline">
-                                                    {m ? <>
-                                                        {renderBadges(m.related_reqs)}
-                                                        {m.ambiguity_hitl && (
-                                                            <div className="relative mt-2 inline-block"
-                                                                onMouseEnter={() => setHoveredAmbiguity(`fs-${i}`)}
-                                                                onMouseLeave={() => setHoveredAmbiguity(null)}>
-                                                                {m.ambiguity_hitl.is_ambiguous
-                                                                    ? <div className="inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent cursor-help"><AlertTriangle size={10}/> 모호성 HITL</div>
-                                                                    : <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-300 cursor-help"><CheckCircle size={10}/> 보정완료</div>
-                                                                }
-                                                                {hoveredAmbiguity === `fs-${i}` && (
-                                                                    <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-borderline rounded-lg shadow-lg p-3 w-72 text-xs">
-                                                                        <div className="mb-2"><span className="text-[10px] font-bold text-sub uppercase">원문</span><p className="text-sub mt-1 leading-relaxed">{m.ambiguity_hitl.original_text || '-'}</p></div>
-                                                                        {m.ambiguity_hitl.is_ambiguous
-                                                                            ? <div><span className="text-[10px] font-bold text-accent uppercase">대안</span>{m.ambiguity_hitl.suggested_options?.map((o,j) => <p key={j} className="text-primary mt-1">· {o}</p>)}</div>
-                                                                            : <div><span className="text-[10px] font-bold text-green-600 uppercase">보정</span><p className="text-green-700 mt-1 leading-relaxed font-bold">{m.ambiguity_hitl.corrected_text || '-'}</p></div>
-                                                                        }
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </> : '-'}
+                                                    {renderBadges(m.related_reqs)}
+                                                    {m.ambiguity_hitl && (
+                                                        <div className="relative mt-2 inline-block"
+                                                            onMouseEnter={() => setHoveredAmbiguity(`fs-${i}`)}
+                                                            onMouseLeave={() => setHoveredAmbiguity(null)}>
+                                                            {m.ambiguity_hitl.is_ambiguous
+                                                                ? <div className="inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent cursor-help"><AlertTriangle size={10}/> 모호성 HITL</div>
+                                                                : <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-300 cursor-help"><CheckCircle size={10}/> 보정완료</div>
+                                                            }
+                                                            {hoveredAmbiguity === `fs-${i}` && (
+                                                                <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-borderline rounded-lg shadow-lg p-3 w-72 text-xs">
+                                                                    <div className="mb-2"><span className="text-[10px] font-bold text-sub uppercase">원문</span><p className="text-sub mt-1 leading-relaxed">{m.ambiguity_hitl.original_text || '-'}</p></div>
+                                                                    {m.ambiguity_hitl.is_ambiguous
+                                                                        ? <div><span className="text-[10px] font-bold text-accent uppercase">대안</span>{m.ambiguity_hitl.suggested_options?.map((o,j) => <p key={j} className="text-primary mt-1">· {o}</p>)}</div>
+                                                                        : <div><span className="text-[10px] font-bold text-green-600 uppercase">보정</span><p className="text-green-700 mt-1 leading-relaxed font-bold">{m.ambiguity_hitl.corrected_text || '-'}</p></div>
+                                                                    }
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </td>
-                                                <td className="p-4 font-bold text-accent">{m?.우선순위||'-'}</td>
+                                                <td className="p-4 font-bold text-accent">{m.우선순위||'-'}</td>
                                             </tr>);
                                         })}
                                     </tbody>
