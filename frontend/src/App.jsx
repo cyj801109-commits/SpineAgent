@@ -29,6 +29,64 @@ const getBusinessCategory = (id) => {
     return null; // 매핑 없으면 null → LLM fallback 유지
 };
 
+// Excel 구조화 파싱: 행/열을 직접 요구사항 객체로 변환 (LLM 불필요)
+// 공통 헤더: [요구사항 ID, 업무(대), 기능(중), 구성(소), 요구정의명, 상세내용, ...]
+const EXCEL_HEADER_ALIASES = {
+    id: ['요구사항 ID', '요구사항ID', '고유번호', '고유ID', '번호', 'ID', 'id'],
+    업무_대: ['업무(대)', '업무_대', '업무대'],
+    기능_중: ['기능(중)', '기능_중', '기능중'],
+    구성_소: ['구성(소)', '구성_소', '구성소'],
+    title: ['요구정의명', '요구사항명', '제목'],
+    detail: ['상세내용', '내용', '설명'],
+};
+const parseExcelToRequirements = (file) => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const allReqs = [];
+                for (const sheetName of workbook.SheetNames) {
+                    if (/리스크|risk/i.test(sheetName)) continue;
+                    const sheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+                    if (json.length < 2) continue;
+                    const headers = json[0].map(h => String(h || '').trim());
+                    // 헤더 매핑: alias → 인덱스
+                    const colMap = {};
+                    for (const [field, aliases] of Object.entries(EXCEL_HEADER_ALIASES)) {
+                        const idx = headers.findIndex(h => aliases.some(a => h === a || h.includes(a)));
+                        if (idx !== -1) colMap[field] = idx;
+                    }
+                    if (!colMap.id && !colMap.title) continue; // 요구사항 시트가 아님
+                    for (let r = 1; r < json.length; r++) {
+                        const row = json[r];
+                        if (!row || row.length === 0) continue;
+                        const id = String(row[colMap.id] ?? '').trim();
+                        const title = String(row[colMap.title] ?? '').trim();
+                        if (!id && !title) continue; // 빈 행
+                        allReqs.push({
+                            id: id || `ROW-${r}`,
+                            title: title || '-',
+                            detail: String(row[colMap.detail] ?? '').trim() || '-',
+                            uiux_relevant: true,
+                            우선순위: '',
+                            업무분류: '',
+                            업무_대: String(row[colMap.업무_대] ?? '').trim() || '',
+                            기능_중: String(row[colMap.기능_중] ?? '').trim() || '',
+                            구성_소: String(row[colMap.구성_소] ?? '').trim() || '',
+                        });
+                    }
+                }
+                resolve(allReqs);
+            } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+    });
+};
+
 const filterNonUiuxItems = (funcReqs, excludedReqs) => {
     const filtered = [];
     const moved = [];
@@ -526,6 +584,7 @@ const App = () => {
             setProgressStep(0);
             let combinedText = inputText;
             const pdfFilesB64 = [];
+            const excelFiles = [];
             if (uploadedFiles.length > 0) {
                 for (const f of uploadedFiles) {
                     if (!f.originFile) continue;
@@ -533,13 +592,15 @@ const App = () => {
                     if (ext === 'pdf') {
                         const b64 = await readFileAsBase64(f.originFile);
                         pdfFilesB64.push({ name: f.name, data: b64 });
+                    } else if (ext === 'xlsx' || ext === 'xls') {
+                        excelFiles.push(f.originFile);
                     } else {
                         const content = await parseFileContent(f.originFile);
                         combinedText += `\n\n--- [FILE: ${f.name}] ---\n${content}`;
                     }
                 }
             }
-            if (!combinedText.trim() && pdfFilesB64.length === 0) throw new Error("분석할 요구사항 데이터가 없습니다. 파일을 업로드하거나 텍스트를 입력해 주세요.");
+            if (!combinedText.trim() && pdfFilesB64.length === 0 && excelFiles.length === 0) throw new Error("분석할 요구사항 데이터가 없습니다. 파일을 업로드하거나 텍스트를 입력해 주세요.");
             if (combinedText.length > MAX_COMBINED_CHARS) {
                 combinedText = combinedText.substring(0, MAX_COMBINED_CHARS) + '\n\n[입력 데이터가 너무 커서 일부가 잘렸습니다. 파일을 분할하여 업로드해주세요.]';
                 setTruncationWarning(prev => prev ? prev + ' / 전체 입력 80,000자 초과로 잘림' : '전체 입력 80,000자 초과로 일부 잘림');
@@ -666,12 +727,23 @@ STEP 3. 최종 판단 기준:
   ]
 }`;
 
-            const CHUNK_SIZE = 15000; // 약 15~20개 요구사항 분량
+            const CHUNK_SIZE = 15000;
             const mergedFunc = [];
             const mergedExcluded = [];
 
-            if (pdfFilesB64.length > 0) {
-                // PDF는 청킹 불가 — 단일 호출
+            if (excelFiles.length > 0) {
+                // Excel 직접 파싱 — LLM Task 1 건너뜀 (결정론적)
+                for (const ef of excelFiles) {
+                    const parsed = await parseExcelToRequirements(ef);
+                    mergedFunc.push(...parsed);
+                }
+                // 텍스트 입력이 함께 있으면 LLM으로 추가 처리
+                if (combinedText.trim()) {
+                    const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1);
+                    mergedFunc.push(...(result.uiux_functional_reqs || []));
+                    mergedExcluded.push(...(result.excluded_reqs || []));
+                }
+            } else if (pdfFilesB64.length > 0) {
                 const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1, pdfFilesB64);
                 mergedFunc.push(...(result.uiux_functional_reqs || []));
                 mergedExcluded.push(...(result.excluded_reqs || []));
@@ -680,7 +752,6 @@ STEP 3. 최종 판단 기준:
                 mergedFunc.push(...(result.uiux_functional_reqs || []));
                 mergedExcluded.push(...(result.excluded_reqs || []));
             } else {
-                // 줄 단위로 청크 분할
                 const lines = combinedText.split('\n');
                 const chunks = [];
                 let current = '';
