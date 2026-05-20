@@ -4,6 +4,45 @@ import * as XLSX from 'xlsx';
 const MAX_EXCEL_ROWS = 300;
 const MAX_COMBINED_CHARS = 80000;
 
+// 비-UIUX 소관 ID 접두사 블랙리스트 (RFP 공통 엔지니어링 도메인)
+const NON_UIUX_PREFIXES = ['DAR', 'TER', 'SER', 'INR', 'QUR', 'PER', 'SFR', 'ECR'];
+
+const filterNonUiuxItems = (funcReqs, excludedReqs) => {
+    const filtered = [];
+    const moved = [];
+    for (const item of funcReqs) {
+        const prefix = (item.id || '').split('-')[0].toUpperCase();
+        if (NON_UIUX_PREFIXES.includes(prefix)) {
+            moved.push({ ...item, exclude_reason: `ID 접두사(${prefix})가 UIUX 소관 외 도메인` });
+        } else {
+            filtered.push(item);
+        }
+    }
+    return { filtered, excluded: [...excludedReqs, ...moved] };
+};
+
+// raw 항목과 optimizedReqs 간 매칭 (1차: related_reqs.target_id, 2차: 요구정의명/title 유사)
+const findMatchedOpt = (raw, optimizedReqs) => {
+    // 1차: 기존 related_reqs[].target_id 매칭
+    const m1 = optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === raw.id));
+    if (m1) return m1;
+    // 2차: 요구정의명 또는 title이 raw.title을 포함하는 항목
+    const m2 = optimizedReqs.find(o =>
+        (o.요구정의명 && raw.title && o.요구정의명.includes(raw.title)) ||
+        (o.고객_요구사항_상세_내용 && raw.detail && o.고객_요구사항_상세_내용.includes(raw.detail?.substring(0, 20)))
+    );
+    if (m2) return m2;
+    // 3차: 매칭 실패 시 raw에서 직접 추출한 필드를 fallback으로 반환
+    const fallback = {
+        우선순위: raw.우선순위 || '-',
+        업무분류: raw.업무분류 || '-',
+        업무_대: raw.업무_대 || '-',
+        기능_중: raw.기능_중 || '-',
+        구성_소: raw.구성_소 || '-',
+    };
+    return (raw.우선순위 || raw.업무분류) ? fallback : null;
+};
+
 // --- All Icons Defined (inline SVG, same as original) ---
 const Layers = ({className, size=20}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>;
 const Play = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>;
@@ -152,7 +191,7 @@ const App = () => {
         const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
         if (merged.length > 0) {
             const ws1 = XLSX.utils.json_to_sheet(merged.map(raw => {
-                const m = optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === raw.id));
+                const m = findMatchedOpt(raw, optimizedReqs);
                 return {
                     "원본ID": raw.id,
                     "업무분류": m?.업무분류||'', "업무_대": m?.업무_대||'', "기능_중": m?.기능_중||'', "구성_소": m?.구성_소||'',
@@ -493,6 +532,10 @@ STEP 1. Out of Scope 판단: 아래 항목은 UIUX 범위 외로 1차 제외한�
   ETL 개발·운영, 데이터 수집·연계·마이그레이션·품질검증, 데이터 아키텍처 설계
   ※ 단, 해당 항목이 "화면에서 어떻게 보여줄지(시각화 방식, 컴포넌트 구조)"를 포함하는 경우는
   STEP 2에서 복구 가능
+- ID 접두사 기반 제외: 아래 접두사로 시작하는 요구사항은 UIUX 소관이 아니므로
+  반드시 excluded_reqs에 포함할 것. 본문 내용과 무관하게 ID만으로 제외한다.
+  DAR(데이터아키텍처), TER(테스트), SER(보안), INR(인프라),
+  QUR(품질), PER(성능), SFR(SW기능), ECR(변경관리)
 
 STEP 2. Context Recovery: STEP 1 제외 항목이라도 아래 UI 키워드 포함 시
 'Conditional'로 분류하여 STEP 3에서 재판단한다.
@@ -511,10 +554,15 @@ STEP 3. 최종 판단 기준:
 - Remove Candidate: 완전 중복·UIUX 범위 외 → excluded_reqs로 분류
 - Re-scope Candidate: 현재 범위 초과·의존성 미충족 → 제약사항 필드에 명시
 
-[FO/BO 구분 기준]
-- FO(Front Office): 일반 사용자가 직접 접근하는 화면
-- BO(Back Office): 관리자/운영자가 사용하는 화면
-- 판단 불가 시 TBD 표기
+[업무분류 판단 기준 — 반드시 값을 채울 것. 빈값 금지]
+- 업무분류: 아래 3가지 중 하나를 반드시 선택
+  - FO (Front Office): 사용자 직접 접점 화면, 포털, 대시보드, 위젯, 검색, 조회 UI
+  - BO (Back Office): 관리자 화면, 설정, 권한관리, 모니터링, 운영 도구
+  - 공통: FO/BO 모두에 적용되는 표준, 가이드라인, 인터페이스, 보안, 공통 컴포넌트
+- 업무_대: 해당 항목의 업무 대분류명 (예: 통합 플랫폼, AI Agent, 포털화면 등)
+- 기능_중: 해당 항목의 기능 중분류명 (예: 사용자 관리, 시각화, 통합검색 등)
+- 구성_소: 해당 항목의 구성 소분류명 (예: SSO 연동, 대시보드 위젯, 검색 필터 등)
+- 업무_대/기능_중/구성_소는 요구사항 본문 내용을 기반으로 계층적으로 명명할 것
 
 [화면 본수 추정 기준]
 - 단일 기능 단순 화면: 1본
@@ -535,7 +583,10 @@ STEP 3. 최종 판단 기준:
   보정 불가 → is_ambiguous: true, suggested_options 제시
 
 [데이터 무결성 규칙]
-1. 원본 ID 100% 그대로 추출, 임의 변경 금지
+1. RFP 문서에는 요구사항을 식별하는 고유 ID 컬럼이 존재한다.
+   컬럼명은 "고유번호", "요구사항ID", "고유ID", "번호" 등 RFP마다 다를 수 있다.
+   해당 컬럼을 문서에서 스스로 찾아서, 그 값을 원본ID로 그대로 사용할 것.
+   절대 임의로 생성, 변환, 채번하지 말 것.
 2. 물리적 행 순서 유지, 임의 정렬 금지
 3. JSON 스키마 외 텍스트 추가 금지
 4. 상세내용은 핵심만 간결하게 요약하여 출력 제한 방지
@@ -546,6 +597,11 @@ STEP 3. 최종 판단 기준:
   (예: 알림 정책 → 알림 UI 설계에 영향, 데이터 시각화 방식 결정 등)
 - 인지필요: 화면 직접 관련은 없으나 성능·접근성 기준 등 UIUX가 알아야 할 항목
 
+[우선순위 판단 기준 — 반드시 "상"/"중"/"하" 중 하나를 채울 것. 빈값 금지]
+- 상: 서비스 핵심 기능, 사용자 직접 체감, 미구현 시 서비스 불가
+- 중: 품질/편의 향상, 없어도 서비스 가능하나 사용성 저하
+- 하: 부가 기능, 향후 개선 가능, 미구현 시 영향 미미
+
 [relation_type 정의]
 - 중복: 내용이 거의 동일하여 하나로 합칠 수 있는 요구사항
 - 통합: 방향이 같아 묶어서 처리 가능한 요구사항
@@ -554,18 +610,13 @@ STEP 3. 최종 판단 기준:
 - 전제조건: 해당 요구사항 구현 전에 반드시 완료되어야 하는 요구사항
 - 유사: 내용이 비슷하지만 범위나 대상이 달라 통합 전 검토가 필요한 요구사항
 
-[요구사항 ID 명명 규칙]
-구조: REQ-{분류영문}-{Level1(2자리)}-{Level2(3자리)}
-- FO-USR(01), FO-ADM(02), BO-ADM(03), BO-SRV(04), CMN(05), NFR(06)
-- Level2: 01(로그인), 02(로그아웃), 03(메인화면), 04(통합검색), 05(MySpace),
-  06(프로젝트수정), 07(프로젝트정보), 08(게시판), 09(Help/산출물),
-  10(코드관리), 11(권한관리), 35(성능), 37(산출물) — 문맥에 맞게 유추 할당`;
+`;
 
             // Task 1: 추출 에이전트 (자동 청킹)
             setProgressStep(2); startStepTimer();
             const schema1 = `{
   "uiux_functional_reqs": [
-    { "id": "원본ID", "title": "요구사항명", "detail": "내용", "uiux_relevant": true }
+    { "id": "원본ID", "title": "요구사항명", "detail": "내용", "uiux_relevant": true, "우선순위": "상/중/하", "업무분류": "FO/BO/공통", "업무_대": "업무 대분류명", "기능_중": "기능 중분류명", "구성_소": "구성 소분류명" }
   ],
   "excluded_reqs": [
     { "id": "원본ID", "title": "요구사항명", "exclude_reason": "제외 사유" }
@@ -607,9 +658,10 @@ STEP 3. 최종 판단 기준:
                 }
             }
 
-            const extractedData = { uiux_functional_reqs: mergedFunc, excluded_reqs: mergedExcluded };
-            setRawFunc(mergedFunc);
-            setRawNonFunc(mergedExcluded);
+            const { filtered: validFunc, excluded: allExcluded } = filterNonUiuxItems(mergedFunc, mergedExcluded);
+            const extractedData = { uiux_functional_reqs: validFunc, excluded_reqs: allExcluded };
+            setRawFunc(validFunc);
+            setRawNonFunc(allExcluded);
             setProgressStep(3);
 
             // Task 2: 최적화 및 구체화 에이전트
@@ -963,7 +1015,7 @@ STEP 3. 최종 판단 기준:
                                             </thead>
                                             <tbody className="divide-y divide-borderline">
                                                 {merged.map((raw, i) => {
-                                                    const m = optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === raw.id));
+                                                    const m = findMatchedOpt(raw, optimizedReqs);
                                                     return (
                                                     <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => m && setSelectedItem({type:'opt',data:m})}>
                                                         <td className="p-4 font-mono font-bold text-accent border-r border-borderline text-[11px]">{raw.id}</td>
@@ -1243,7 +1295,7 @@ STEP 3. 최종 판단 기준:
                                     </thead>
                                     <tbody className="divide-y divide-borderline font-normal text-primary">
                                         {merged.map((raw, i) => {
-                                            const m = optimizedReqs.find(o => o.related_reqs?.some(rel => rel.target_id === raw.id));
+                                            const m = findMatchedOpt(raw, optimizedReqs);
                                             return (
                                             <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all" onClick={() => m && setSelectedItem({type:'opt',data:m})}>
                                                 <td className="p-4 font-mono font-bold text-accent border-r border-borderline">{raw.id}</td>
