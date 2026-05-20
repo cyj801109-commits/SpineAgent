@@ -39,6 +39,11 @@ const findMatchedOpt = (raw, optimizedReqs) => {
         업무_대: raw.업무_대 || '-',
         기능_중: raw.기능_중 || '-',
         구성_소: raw.구성_소 || '-',
+        ambiguity_hitl: raw.ambiguity_hitl || {
+            original_text: raw.detail?.slice(0, 50) || '-',
+            corrected_text: '-',
+            is_ambiguous: false,
+        },
     };
     return (raw.우선순위 || raw.업무분류) ? fallback : null;
 };
@@ -194,13 +199,15 @@ const App = () => {
                 const m = findMatchedOpt(raw, optimizedReqs);
                 return {
                     "원본ID": raw.id,
-                    "업무분류": m?.업무분류||'', "업무_대": m?.업무_대||'', "기능_중": m?.기능_중||'', "구성_소": m?.구성_소||'',
-                    "분류/유형": m ? `${m.요구사항유형분류?.분류||''}/${m.요구사항유형분류?.유형||''}` : '',
+                    "업무분류": m?.업무분류||'-', "업무_대": m?.업무_대||'-', "기능_중": m?.기능_중||'-', "구성_소": m?.구성_소||'-',
+                    "분류/유형": m ? `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}` : '-',
                     "요구사항명": raw.title, "상세내용": raw.detail,
-                    "연관요구사항": m?.related_reqs?.map(r=>r.target_id).join(', ')||'',
-                    "우선순위": m?.우선순위||'',
-                    "모호성_원문": m?.ambiguity_hitl?.original_text||'',
-                    "모호성_보정": m?.ambiguity_hitl?.corrected_text||''
+                    "연관요구사항": m?.related_reqs?.map(r=>r.target_id).join(', ')||'-',
+                    "우선순위": m?.우선순위||'-',
+                    "모호성_상태": m?.ambiguity_hitl?.is_ambiguous ? '검토필요' : (m?.ambiguity_hitl?.corrected_text && m?.ambiguity_hitl?.original_text !== m?.ambiguity_hitl?.corrected_text) ? '자동보정' : '-',
+                    "모호성_원문": m?.ambiguity_hitl?.original_text||'-',
+                    "모호성_보정": m?.ambiguity_hitl?.corrected_text||'-',
+                    "모호성_사유": m?.ambiguity_hitl?.ambiguity_reason||'-'
                 };
             }));
             XLSX.utils.book_append_sheet(wb, ws1, "UIUX 선별");
@@ -576,11 +583,16 @@ STEP 3. 최종 판단 기준:
 - "최적화된 폼" → "입력 필드 자동완성, 실시간 유효성 검사"
 - "빠른 응답" → "API P95 응답 3초 이내"
 - 위 예시처럼 측정 가능한 기준으로 반드시 재서술할 것
+- 모호 표현 탐지 대상: 수치 불명확("일부", "적절히", "빠르게", "충분히" 등),
+  범위 불명확("관련 데이터", "필요한 경우", "기타", "등" 등),
+  기준 불명확("최적화된", "효율적인", "안정적인" 등)
 - 모호 표현 보정 시 반드시:
-  ambiguity_hitl.original_text: 원문 그대로
+  ambiguity_hitl.original_text: 원문 모호 표현 (보정 여부와 무관하게 반드시 채울 것)
   ambiguity_hitl.corrected_text: 보정된 구체적 표현
+  ambiguity_hitl.ambiguity_reason: 왜 모호한지 사유
   자동 보정 완료 → is_ambiguous: false, corrected_text 포함
   보정 불가 → is_ambiguous: true, suggested_options 제시
+- 모호 표현이 없는 항목도 original_text에 해당 요구사항의 핵심 문장을 기재할 것
 
 [데이터 무결성 규칙]
 1. RFP 문서에는 요구사항을 식별하는 고유 ID 컬럼이 존재한다.
@@ -616,7 +628,17 @@ STEP 3. 최종 판단 기준:
             setProgressStep(2); startStepTimer();
             const schema1 = `{
   "uiux_functional_reqs": [
-    { "id": "원본ID", "title": "요구사항명", "detail": "내용", "uiux_relevant": true, "우선순위": "상/중/하", "업무분류": "FO/BO/공통", "업무_대": "업무 대분류명", "기능_중": "기능 중분류명", "구성_소": "구성 소분류명" }
+    {
+      "id": "원본ID", "title": "요구사항명", "detail": "내용", "uiux_relevant": true,
+      "우선순위": "상/중/하", "업무분류": "FO/BO/공통",
+      "업무_대": "업무 대분류명", "기능_중": "기능 중분류명", "구성_소": "구성 소분류명",
+      "ambiguity_hitl": {
+        "is_ambiguous": false,
+        "original_text": "원문 모호 표현 (반드시 채울 것)",
+        "corrected_text": "보정된 구체적 표현",
+        "ambiguity_reason": "보정 사유"
+      }
+    }
   ],
   "excluded_reqs": [
     { "id": "원본ID", "title": "요구사항명", "exclude_reason": "제외 사유" }
@@ -1349,7 +1371,14 @@ STEP 3. 최종 판단 기준:
             )}
 
             {/* --- Ambiguity Summary Modal --- */}
-            {showAmbiguityModal && (
+            {showAmbiguityModal && (() => {
+                const ambiguityItems = optimizedReqs.filter(r =>
+                    r.ambiguity_hitl?.is_ambiguous ||
+                    (r.ambiguity_hitl?.original_text && r.ambiguity_hitl?.corrected_text && r.ambiguity_hitl.original_text !== r.ambiguity_hitl.corrected_text)
+                );
+                const needsReview = ambiguityItems.filter(r => r.ambiguity_hitl?.is_ambiguous);
+                const autoCorrected = ambiguityItems.filter(r => !r.ambiguity_hitl?.is_ambiguous);
+                return (
                 <div className="fixed inset-0 z-[90] flex items-center justify-center bg-primary/40 backdrop-blur-sm p-6 animate-in fade-in duration-200" onClick={() => setShowAmbiguityModal(false)}>
                     <div className="bg-white rounded-lg shadow-lg w-full max-w-3xl flex flex-col max-h-[90vh] animate-in zoom-in-95 border border-borderline" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center p-6 border-b border-borderline bg-white rounded-t-lg shrink-0">
@@ -1357,17 +1386,19 @@ STEP 3. 최종 판단 기준:
                                 <div className="bg-white p-2 rounded text-accent border border-borderline"><AlertTriangle size={20}/></div>
                                 <div>
                                     <h3 className="text-lg font-bold text-primary uppercase leading-tight">모호성 보정 목록</h3>
-                                    <p className="text-[11px] text-sub font-bold uppercase mt-1 tracking-widest">{optimizedReqs.filter(r => r.ambiguity_hitl?.is_ambiguous).length}건</p>
+                                    <p className="text-[11px] text-sub font-bold uppercase mt-1 tracking-widest">검토 필요 {needsReview.length}건 · 자동 보정 {autoCorrected.length}건</p>
                                 </div>
                             </div>
                             <button onClick={() => setShowAmbiguityModal(false)} className="p-2 bg-white hover:bg-pagebg rounded border border-borderline transition-all text-primary active:scale-90"><X size={16}/></button>
                         </div>
                         <div className="p-6 overflow-y-auto space-y-4">
-                            {optimizedReqs.filter(r => r.ambiguity_hitl?.is_ambiguous).map((r, i) => (
-                                <div key={i} className="border border-borderline rounded-lg p-5 hover:border-accent transition-colors">
+                            {needsReview.length > 0 && <p className="text-[10px] font-bold uppercase tracking-widest text-accent border-b border-borderline pb-2">검토 필요</p>}
+                            {needsReview.map((r, i) => (
+                                <div key={`r-${i}`} className="border border-accent/30 rounded-lg p-5 bg-orange-50/30">
                                     <div className="flex items-center gap-2 mb-3">
                                         <span className="font-mono text-xs font-bold text-accent">{r.요구사항ID}</span>
                                         <span className="text-sm font-bold text-primary">{r.요구정의명}</span>
+                                        <span className="text-[9px] font-bold bg-accent text-white px-2 py-0.5 rounded">검토 필요</span>
                                     </div>
                                     {r.ambiguity_hitl.original_text && (
                                         <div className="bg-pagebg border border-borderline p-3 rounded mb-2">
@@ -1391,13 +1422,31 @@ STEP 3. 최종 판단 기준:
                                     )}
                                 </div>
                             ))}
-                            {optimizedReqs.filter(r => r.ambiguity_hitl?.is_ambiguous).length === 0 && (
+                            {autoCorrected.length > 0 && <p className="text-[10px] font-bold uppercase tracking-widest text-green-600 border-b border-borderline pb-2 mt-4">자동 보정 완료</p>}
+                            {autoCorrected.map((r, i) => (
+                                <div key={`a-${i}`} className="border border-green-200 rounded-lg p-5 bg-green-50/30">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <span className="font-mono text-xs font-bold text-accent">{r.요구사항ID}</span>
+                                        <span className="text-sm font-bold text-primary">{r.요구정의명}</span>
+                                        <span className="text-[9px] font-bold bg-green-600 text-white px-2 py-0.5 rounded">자동 보정</span>
+                                    </div>
+                                    <div className="bg-pagebg border border-borderline p-3 rounded mb-2">
+                                        <span className="text-[10px] font-bold text-sub uppercase tracking-wide">보정 전</span>
+                                        <p className="text-xs text-sub mt-1 leading-relaxed line-through opacity-60">{r.ambiguity_hitl.original_text || '-'}</p>
+                                    </div>
+                                    <div className="bg-green-50 border border-green-200 p-3 rounded">
+                                        <span className="text-[10px] font-bold text-green-600 uppercase tracking-wide">보정 후</span>
+                                        <p className="text-xs text-green-700 mt-1 leading-relaxed font-bold">{r.ambiguity_hitl.corrected_text || '-'}</p>
+                                    </div>
+                                </div>
+                            ))}
+                            {ambiguityItems.length === 0 && (
                                 <div className="text-center text-sub py-8">모호성 보정 대상 항목이 없습니다.</div>
                             )}
                         </div>
                     </div>
-                </div>
-            )}
+                </div>);
+            })()}
         </div>
     );
 };
