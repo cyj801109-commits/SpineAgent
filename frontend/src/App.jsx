@@ -684,6 +684,7 @@ STEP 3. 최종 판단 기준:
 
             const { filtered: validFunc, llmExcluded, codeExcluded } = filterNonUiuxItems(mergedFunc, mergedExcluded);
             const extractedData = { uiux_functional_reqs: validFunc, excluded_reqs: [...llmExcluded, ...codeExcluded] };
+            const actualTotalCount = validFunc.length + llmExcluded.length + codeExcluded.length;
             setRawFunc(validFunc);
             setRawNonFunc(llmExcluded);
             setRawExcluded(codeExcluded);
@@ -693,9 +694,6 @@ STEP 3. 최종 판단 기준:
             setProgressStep(4); startStepTimer();
             const schema2 = `{
   "optimization_summary": {
-    "total_input_count": 0,
-    "uiux_selected_count": 0,
-    "excluded_count": 0,
     "ambiguity_resolved_count": 0,
     "selection_reason": "선별 판단 근거 요약"
   },
@@ -729,7 +727,13 @@ STEP 3. 최종 판단 기준:
 }`;
 
             const optimizedData = await callBackendAPI(JSON.stringify(extractedData), coreSystemPrompt, schema2);
-            setMetrics(optimizedData.optimization_summary);
+            const actualSelectedCount = optimizedData.optimized_requirements?.length || 0;
+            setMetrics({
+                ...optimizedData.optimization_summary,
+                total_input_count: actualTotalCount,
+                uiux_selected_count: actualSelectedCount,
+                excluded_count: actualTotalCount - actualSelectedCount,
+            });
             setOptimizedReqs(optimizedData.optimized_requirements || []);
             setProgressStep(5);
 
