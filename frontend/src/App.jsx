@@ -340,7 +340,7 @@ const App = () => {
         setSelectedItem(null);
     };
 
-    const callBackendAPI = async (promptData, systemInstruction, schemaDefinition, pdfFiles = []) => {
+    const callBackendAPI = async (promptData, systemInstruction, schemaDefinition, pdfFiles = [], temperature = 0.2) => {
         let retries = 3;
         let delay = 2000;
         while (retries > 0) {
@@ -353,7 +353,8 @@ const App = () => {
                         prompt: promptData,
                         systemInstruction: systemInstruction,
                         schema: schemaDefinition,
-                        pdf_files: pdfFiles
+                        pdf_files: pdfFiles,
+                        temperature: temperature
                     })
                 });
 
@@ -739,16 +740,16 @@ STEP 3. 최종 판단 기준:
                 }
                 // 텍스트 입력이 함께 있으면 LLM으로 추가 처리
                 if (combinedText.trim()) {
-                    const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1);
+                    const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1, [], 0);
                     mergedFunc.push(...(result.uiux_functional_reqs || []));
                     mergedExcluded.push(...(result.excluded_reqs || []));
                 }
             } else if (pdfFilesB64.length > 0) {
-                const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1, pdfFilesB64);
+                const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1, pdfFilesB64, 0);
                 mergedFunc.push(...(result.uiux_functional_reqs || []));
                 mergedExcluded.push(...(result.excluded_reqs || []));
             } else if (combinedText.length <= CHUNK_SIZE) {
-                const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1);
+                const result = await callBackendAPI(combinedText, coreSystemPrompt, schema1, [], 0);
                 mergedFunc.push(...(result.uiux_functional_reqs || []));
                 mergedExcluded.push(...(result.excluded_reqs || []));
             } else {
@@ -766,7 +767,7 @@ STEP 3. 최종 판단 기준:
 
                 for (let i = 0; i < chunks.length; i++) {
                     const chunkPrompt = `[청크 ${i + 1}/${chunks.length}] 아래는 전체 요구사항 중 일부입니다. 이 부분만 분석하세요.\n\n${chunks[i]}`;
-                    const result = await callBackendAPI(chunkPrompt, coreSystemPrompt, schema1);
+                    const result = await callBackendAPI(chunkPrompt, coreSystemPrompt, schema1, [], 0);
                     mergedFunc.push(...(result.uiux_functional_reqs || []));
                     mergedExcluded.push(...(result.excluded_reqs || []));
                 }

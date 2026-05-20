@@ -47,6 +47,7 @@ class AnalyzeRequest(BaseModel):
     systemInstruction: str
     schema: str
     pdf_files: Optional[list[PdfFile]] = None
+    temperature: Optional[float] = 0.2
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
@@ -71,9 +72,9 @@ async def analyze(req: AnalyzeRequest):
 
     gen_config = GenerationConfig(
         response_mime_type="application/json",
-        temperature=0.2,
-        top_p=0.6,
-        top_k=40,
+        temperature=req.temperature,
+        top_p=0.6 if req.temperature > 0 else 1.0,
+        top_k=40 if req.temperature > 0 else 1,
         max_output_tokens=65536,
     )
 
