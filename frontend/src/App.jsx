@@ -7,6 +7,28 @@ const MAX_COMBINED_CHARS = 80000;
 // 비-UIUX 소관 ID 접두사 블랙리스트 (RFP 공통 엔지니어링 도메인)
 const NON_UIUX_PREFIXES = ['DAR', 'TER', 'SER', 'INR', 'QUR', 'PER', 'SFR', 'ECR', 'COR', 'FR', 'NFR', 'SREQ', 'APP', 'RISK'];
 
+// ID 접두사 → 업무분류 결정론적 매핑 (실제 RFP 데이터 기반)
+// REQ-FOUSR → FO, REQ-FOADM → FO, REQ-BOADM → BO, REQ-BOSRV → BO,
+// REQ-CMN → 공통, REQ-NFR → 공통
+const BIZ_CATEGORY_MAP = {
+    'FOUSR': 'FO', 'FOADM': 'FO',
+    'BOADM': 'BO', 'BOSRV': 'BO',
+    'CMN': '공통', 'NFR': '공통',
+};
+const getBusinessCategory = (id) => {
+    if (!id) return null;
+    const parts = id.split('-');
+    // REQ-{SUB}-... 패턴
+    if (parts[0]?.toUpperCase() === 'REQ' && parts.length >= 2) {
+        const sub = parts[1].toUpperCase();
+        if (BIZ_CATEGORY_MAP[sub]) return BIZ_CATEGORY_MAP[sub];
+        // 패턴 부분 매칭: FO로 시작 → FO, BO로 시작 → BO
+        if (sub.startsWith('FO')) return 'FO';
+        if (sub.startsWith('BO')) return 'BO';
+    }
+    return null; // 매핑 없으면 null → LLM fallback 유지
+};
+
 const filterNonUiuxItems = (funcReqs, excludedReqs) => {
     const filtered = [];
     const moved = [];
@@ -560,15 +582,12 @@ STEP 3. 최종 판단 기준:
 - Remove Candidate: 완전 중복·UIUX 범위 외 → excluded_reqs로 분류
 - Re-scope Candidate: 현재 범위 초과·의존성 미충족 → 제약사항 필드에 명시
 
-[업무분류 판단 기준 — 반드시 값을 채울 것. 빈값 금지]
-- 업무분류: 아래 3가지 중 하나를 반드시 선택
-  - FO (Front Office): 사용자 직접 접점 화면, 포털, 대시보드, 위젯, 검색, 조회 UI
-  - BO (Back Office): 관리자 화면, 설정, 권한관리, 모니터링, 운영 도구
-  - 공통: FO/BO 모두에 적용되는 표준, 가이드라인, 인터페이스, 보안, 공통 컴포넌트
+[업무 계층 분류 기준]
+- 업무분류: 코드에서 ID 접두사 기반으로 자동 처리됨. 빈 문자열로 고정할 것.
 - 업무_대: 해당 항목의 업무 대분류명 (예: 통합 플랫폼, AI Agent, 포털화면 등)
 - 기능_중: 해당 항목의 기능 중분류명 (예: 사용자 관리, 시각화, 통합검색 등)
 - 구성_소: 해당 항목의 구성 소분류명 (예: SSO 연동, 대시보드 위젯, 검색 필터 등)
-- 업무_대/기능_중/구성_소는 요구사항 본문 내용을 기반으로 계층적으로 명명할 것
+- 업무_대/기능_중/구성_소는 요구사항 본문 내용을 기반으로 계층적으로 명명할 것. 빈값 금지.
 
 [화면 본수 추정 기준]
 - 단일 기능 단순 화면: 1본
@@ -632,7 +651,7 @@ STEP 3. 최종 판단 기준:
   "uiux_functional_reqs": [
     {
       "id": "원본ID", "title": "요구사항명", "detail": "내용", "uiux_relevant": true,
-      "우선순위": "상/중/하", "업무분류": "FO/BO/공통",
+      "우선순위": "상/중/하", "업무분류": "",
       "업무_대": "업무 대분류명", "기능_중": "기능 중분류명", "구성_소": "구성 소분류명",
       "ambiguity_hitl": {
         "is_ambiguous": false,
@@ -680,6 +699,12 @@ STEP 3. 최종 판단 기준:
                     mergedFunc.push(...(result.uiux_functional_reqs || []));
                     mergedExcluded.push(...(result.excluded_reqs || []));
                 }
+            }
+
+            // 업무분류를 ID 접두사 기반으로 결정론적으로 덮어쓰기
+            for (const item of mergedFunc) {
+                const codeBiz = getBusinessCategory(item.id);
+                if (codeBiz) item.업무분류 = codeBiz;
             }
 
             const { filtered: validFunc, llmExcluded, codeExcluded } = filterNonUiuxItems(mergedFunc, mergedExcluded);
