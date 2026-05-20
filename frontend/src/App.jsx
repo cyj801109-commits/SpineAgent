@@ -5,7 +5,7 @@ const MAX_EXCEL_ROWS = 300;
 const MAX_COMBINED_CHARS = 80000;
 
 // 비-UIUX 소관 ID 접두사 블랙리스트 (RFP 공통 엔지니어링 도메인)
-const NON_UIUX_PREFIXES = ['DAR', 'TER', 'SER', 'INR', 'QUR', 'PER', 'SFR', 'ECR'];
+const NON_UIUX_PREFIXES = ['DAR', 'TER', 'SER', 'INR', 'QUR', 'PER', 'SFR', 'ECR', 'COR', 'FR', 'NFR', 'SREQ', 'APP', 'RISK'];
 
 const filterNonUiuxItems = (funcReqs, excludedReqs) => {
     const filtered = [];
@@ -18,7 +18,7 @@ const filterNonUiuxItems = (funcReqs, excludedReqs) => {
             filtered.push(item);
         }
     }
-    return { filtered, excluded: [...excludedReqs, ...moved] };
+    return { filtered, llmExcluded: excludedReqs, codeExcluded: moved };
 };
 
 // raw 항목과 optimizedReqs 간 매칭 (1차: related_reqs.target_id, 2차: 요구정의명/title 유사)
@@ -83,6 +83,7 @@ const App = () => {
     const [metrics, setMetrics] = useState(null);
     const [rawFunc, setRawFunc] = useState([]);
     const [rawNonFunc, setRawNonFunc] = useState([]);
+    const [rawExcluded, setRawExcluded] = useState([]); // 코드 필터 제거 비-UIUX 항목 (화면 미표시)
     const [optimizedReqs, setOptimizedReqs] = useState([]);
     const [conflicts, setConflicts] = useState([]);
     const [prerequisiteRelations, setPrerequisiteRelations] = useState([]);
@@ -193,7 +194,7 @@ const App = () => {
         const wb = XLSX.utils.book_new();
 
         // ① UIUX 선별 시트 — 웹뷰와 동일 컬럼
-        const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
+        const merged = [...rawFunc.map(r=>({...r,type:'기능'}))]; // rawNonFunc·rawExcluded는 제외 항목이므로 미표시
         if (merged.length > 0) {
             const ws1 = XLSX.utils.json_to_sheet(merged.map(raw => {
                 const m = findMatchedOpt(raw, optimizedReqs);
@@ -680,10 +681,11 @@ STEP 3. 최종 판단 기준:
                 }
             }
 
-            const { filtered: validFunc, excluded: allExcluded } = filterNonUiuxItems(mergedFunc, mergedExcluded);
-            const extractedData = { uiux_functional_reqs: validFunc, excluded_reqs: allExcluded };
+            const { filtered: validFunc, llmExcluded, codeExcluded } = filterNonUiuxItems(mergedFunc, mergedExcluded);
+            const extractedData = { uiux_functional_reqs: validFunc, excluded_reqs: [...llmExcluded, ...codeExcluded] };
             setRawFunc(validFunc);
-            setRawNonFunc(allExcluded);
+            setRawNonFunc(llmExcluded);
+            setRawExcluded(codeExcluded);
             setProgressStep(3);
 
             // Task 2: 최적화 및 구체화 에이전트
@@ -949,7 +951,7 @@ STEP 3. 최종 판단 기준:
                         {!isAnalyzing && metrics && !errorMessage && (
                             <div className="flex gap-0 px-2 shrink-0 overflow-x-auto text-primary z-20 relative">
                                 {['UIUX 선별', '충돌', '파이프라인'].map(tab => {
-                                    const count = tab === 'UIUX 선별' ? rawFunc.length + rawNonFunc.length : tab === '충돌' ? conflicts.length + prerequisiteRelations.length + similarReqs.length : null;
+                                    const count = tab === 'UIUX 선별' ? rawFunc.length : tab === '충돌' ? conflicts.length + prerequisiteRelations.length + similarReqs.length : null;
                                     return (
                                     <button key={tab}
                                             onClick={() => setActiveTab(tab)}
@@ -1017,8 +1019,8 @@ STEP 3. 최종 판단 기준:
                                         </div>
                                     )}
 
-                                    {!isAnalyzing && !errorMessage && activeTab === 'UIUX 선별' && (rawFunc.length > 0 || rawNonFunc.length > 0) && (() => {
-                                        const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
+                                    {!isAnalyzing && !errorMessage && activeTab === 'UIUX 선별' && (rawFunc.length > 0) && (() => {
+                                        const merged = [...rawFunc.map(r=>({...r,type:'기능'}))]; // rawNonFunc·rawExcluded는 제외 항목이므로 미표시
                                         return (
                                         <table className="w-full text-left text-xs border-collapse min-w-[1400px] bg-white text-primary">
                                             <thead className="sticky top-0 bg-pagebg text-[11px] uppercase tracking-widest text-sub border-b border-borderline z-10 font-bold">
@@ -1298,7 +1300,7 @@ STEP 3. 최종 판단 기준:
                         </div>
                         <div className="flex-1 overflow-auto p-6 bg-pagebg z-10">
                             {activeTab === 'UIUX 선별' ? (() => {
-                                const merged = [...rawFunc.map(r=>({...r,type:'기능'})), ...rawNonFunc.map(r=>({...r,type:'비기능'}))];
+                                const merged = [...rawFunc.map(r=>({...r,type:'기능'}))]; // rawNonFunc·rawExcluded는 제외 항목이므로 미표시
                                 return (
                                 <table className="w-full text-left text-[11px] border-collapse min-w-[1400px] shadow-sm rounded border border-borderline bg-white">
                                     <thead className="bg-pagebg text-sub sticky top-0 z-10 text-[11px] uppercase tracking-widest font-bold">
