@@ -841,8 +841,15 @@ STEP 3. 최종 판단 기준:
             });
             const optReqs = (optimizedData.optimized_requirements || []).map(item => {
                 const firstId = (item.원본_ids || '').split(',')[0]?.trim() || item.related_reqs?.[0]?.target_id || '';
+                const originalItem = validFunc.find(r => r.id === firstId);
                 const codeBiz = getBusinessCategory(firstId);
-                return codeBiz ? { ...item, 업무분류: codeBiz } : item;
+                return {
+                    ...item,
+                    업무분류: codeBiz || originalItem?.업무분류 || item.업무분류,
+                    업무_대: originalItem?.업무_대 || item.업무_대,
+                    기능_중: originalItem?.기능_중 || item.기능_중,
+                    구성_소: originalItem?.구성_소 || item.구성_소,
+                };
             });
             setOptimizedReqs(optReqs);
             setProgressStep(5);
