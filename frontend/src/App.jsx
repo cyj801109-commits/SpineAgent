@@ -33,6 +33,7 @@ const getBusinessCategory = (id) => {
 // 공통 헤더: [요구사항 ID, 업무(대), 기능(중), 구성(소), 요구정의명, 상세내용, ...]
 const EXCEL_HEADER_ALIASES = {
     id: ['요구사항 ID', '요구사항ID', '고유번호', '고유ID', '번호', 'ID', 'id'],
+    업무분류: ['업무분류', '분류', '업무 분류'],
     업무_대: ['업무(대)', '업무_대', '업무대'],
     기능_중: ['기능(중)', '기능_중', '기능중'],
     구성_소: ['구성(소)', '구성_소', '구성소'],
@@ -72,7 +73,7 @@ const parseExcelToRequirements = (file) => {
                             detail: String(row[colMap.detail] ?? '').trim() || '-',
                             uiux_relevant: true,
                             우선순위: '',
-                            업무분류: '',
+                            업무분류: String(row[colMap.업무분류] ?? '').trim() || '',
                             업무_대: String(row[colMap.업무_대] ?? '').trim() || '',
                             기능_중: String(row[colMap.기능_중] ?? '').trim() || '',
                             구성_소: String(row[colMap.구성_소] ?? '').trim() || '',
@@ -299,11 +300,25 @@ const App = () => {
         }
 
         // ② 충돌 시트
-        if (conflicts.length > 0) {
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(conflicts.map(c => ({
-                "충돌ID": c.conflict_id, "관련ID": c.involved_req_ids?.join(', '), "충돌사유": c.conflict_reason
-            }))), "충돌");
-        }
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+            conflicts.length > 0
+                ? conflicts.map(c => ({ "충돌ID": c.conflict_id, "관련ID": c.involved_req_ids?.join(', '), "충돌사유": c.conflict_reason, "추천안": c.recommendation || '-' }))
+                : [{ "충돌ID": "-", "관련ID": "-", "충돌사유": "충돌 없음", "추천안": "-" }]
+        ), "충돌");
+
+        // ②-b 전제조건 시트
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+            prerequisiteRelations.length > 0
+                ? prerequisiteRelations.map(p => ({ "관계ID": p.relation_id, "선행 요구사항": p.prerequisite_id, "후행 요구사항": p.dependent_ids?.join(', '), "사유": p.reason }))
+                : [{ "관계ID": "-", "선행 요구사항": "-", "후행 요구사항": "-", "사유": "전제조건 관계 없음" }]
+        ), "전제조건");
+
+        // ②-c 유사항목 시트
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+            similarReqs.length > 0
+                ? similarReqs.map(s => ({ "관계ID": s.relation_id, "유사 요구사항": s.req_ids?.join(', '), "유사 내용": s.similarity_summary, "조치": s.action }))
+                : [{ "관계ID": "-", "유사 요구사항": "-", "유사 내용": "-", "조치": "유사 항목 없음" }]
+        ), "유사항목");
 
         // ③ 파이프라인 시트
         if (processingSteps.length > 0) {
