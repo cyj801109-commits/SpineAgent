@@ -87,13 +87,21 @@ const parseExcelToRequirements = (file) => {
     });
 };
 
+// STEP 2 복구 키워드 (LLM 프롬프트와 동일)
+const RECOVERY_KEYWORDS = ['화면','조회UI','노출','버튼','클릭','팝업','모달','입력폼','레이아웃','대시보드','위젯','메뉴','탭','검색','필터','정렬','페이징','알림','토스트'];
+
 const filterNonUiuxItems = (funcReqs, excludedReqs) => {
     const filtered = [];
     const moved = [];
     for (const item of funcReqs) {
         const prefix = (item.id || '').split('-')[0].toUpperCase();
         if (NON_UIUX_PREFIXES.includes(prefix)) {
-            moved.push({ ...item, exclude_reason: `ID 접두사(${prefix})가 UIUX 소관 외 도메인` });
+            const text = `${item.title || ''} ${item.detail || ''}`;
+            if (RECOVERY_KEYWORDS.some(kw => text.includes(kw))) {
+                filtered.push(item); // 복구 키워드 포함 → 통과
+            } else {
+                moved.push({ ...item, exclude_reason: `ID 접두사(${prefix})가 UIUX 소관 외 도메인` });
+            }
         } else {
             filtered.push(item);
         }
