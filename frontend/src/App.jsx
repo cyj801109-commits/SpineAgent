@@ -881,10 +881,11 @@ STEP 3. 최종 판단 기준:
             setSimilarReqs(conflictData.similar_reqs || []);
 
             if (optimizedData.optimization_summary) {
-                setMetrics({
+                setMetrics(prev => ({
+                    ...prev,
                     ...optimizedData.optimization_summary,
                     conflict_req_count: conflictData.conflicts?.length || 0
-                });
+                }));
             }
             setProgressStep(7);
 
