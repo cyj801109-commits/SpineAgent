@@ -5,7 +5,7 @@ const MAX_EXCEL_ROWS = 300;
 const MAX_COMBINED_CHARS = 80000;
 
 // 비-UIUX 소관 ID 접두사 블랙리스트 (RFP 공통 엔지니어링 도메인)
-const NON_UIUX_PREFIXES = ['DAR', 'TER', 'SER', 'INR', 'QUR', 'PER', 'SFR', 'ECR', 'COR', 'FR', 'NFR', 'SREQ', 'APP', 'RISK'];
+const NON_UIUX_PREFIXES = ['DAR', 'TER', 'SER', 'INR', 'QUR', 'PER', 'SFR', 'ECR', 'COR', 'SREQ', 'APP', 'RISK'];
 
 // ID 접두사 → 업무분류 결정론적 매핑 (실제 RFP 데이터 기반)
 // REQ-FOUSR → FO, REQ-FOADM → FO, REQ-BOADM → BO, REQ-BOSRV → BO,
@@ -831,7 +831,12 @@ STEP 3. 최종 판단 기준:
                 uiux_selected_count: actualSelectedCount,
                 excluded_count: actualTotalCount - actualSelectedCount,
             });
-            setOptimizedReqs(optimizedData.optimized_requirements || []);
+            const optReqs = (optimizedData.optimized_requirements || []).map(item => {
+                const firstId = (item.원본_ids || '').split(',')[0]?.trim() || item.related_reqs?.[0]?.target_id || '';
+                const codeBiz = getBusinessCategory(firstId);
+                return codeBiz ? { ...item, 업무분류: codeBiz } : item;
+            });
+            setOptimizedReqs(optReqs);
             setProgressStep(5);
 
             // Task 3: 정책 충돌 + 전제조건 + 유사 관계 검증 에이전트
