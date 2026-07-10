@@ -74,7 +74,7 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
     <div class="page-label">SPINE · 파이프라인 구조도</div>
     <div class="page-title">요구사항 분석 파이프라인</div>
     <div class="meta-row">
-      <span class="meta-pill">v1.0</span>
+      <span class="meta-pill">v1.1</span>
       <span class="meta-pill">3-Stage Agent Pipeline</span>
       <span class="meta-pill">Gemini 2.5 Flash</span>
       <span class="meta-pill">Vertex AI (asia-northeast3)</span>
@@ -91,14 +91,14 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
   <!-- 분기 흐름 -->
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 4px;">
     <div style="background:#EAF3DE;border:1px solid #C0DD97;border-radius:8px;padding:14px 16px;">
-      <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#3B6D11;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;">경로 A · Excel / CSV</div>
-      <div style="font-size:12px;color:#57534E;line-height:1.6;">parseExcelToRequirements() 코드 직접 파싱<br>→ 헤더 자동 매핑 (요구사항 ID, 업무(대), 기능(중), 구성(소))<br>→ <strong style="color:#3B6D11;">STEP 01 LLM 건너뜀</strong> → STEP 02 직행</div>
-      <div style="margin-top:8px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#3B6D11;">temperature 무관 · 결정론적 · 매 실행 동일 결과</div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#3B6D11;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;">경로 A · Excel 전용</div>
+      <div style="font-size:12px;color:#57534E;line-height:1.6;">parseExcelToRequirements() 코드 직접 파싱<br>→ 헤더 자동 매핑 (요구사항 ID, 업무분류, 업무(대), 기능(중), 구성(소))<br>→ <strong style="color:#3B6D11;">STEP 01 LLM 건너뜀</strong> → STEP 02 직행</div>
+      <div style="margin-top:8px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#3B6D11;">LLM 호출: 총 2회 (STEP 02 + STEP 03)<br>temperature 무관 · 결정론적 · 매 실행 동일 결과</div>
     </div>
     <div style="background:#FAECE7;border:1px solid #F5C4B3;border-radius:8px;padding:14px 16px;">
       <div style="font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#993C1D;margin-bottom:6px;font-family:'IBM Plex Mono',monospace;">경로 B · PDF / 텍스트</div>
-      <div style="font-size:12px;color:#57534E;line-height:1.6;">combinedText 생성 → 80,000자 상한 적용<br>→ 15,000자 단위 자동 청킹<br>→ <strong style="color:#993C1D;">STEP 01 LLM 호출</strong> → STEP 02</div>
-      <div style="margin-top:8px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#993C1D;">temperature=0 · top_k=1 · greedy decoding</div>
+      <div style="font-size:12px;color:#57534E;line-height:1.6;">combinedText 생성 → 80,000자 상한 적용<br>→ 15,000자 초과 시 자동 청킹 (줄바꿈 기준)<br>→ <strong style="color:#993C1D;">STEP 01 LLM 호출</strong> → STEP 02 → STEP 03</div>
+      <div style="margin-top:8px;font-size:10px;font-family:'IBM Plex Mono',monospace;color:#993C1D;">LLM 호출: 총 3회 (짧은 텍스트) 또는 N+2회 (청크 N개)<br>STEP 01: temperature=0 · STEP 02~03: temperature=0.2</div>
     </div>
   </div>
 
@@ -138,7 +138,7 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
           <div class="cell-val">데이터 무결성 절대 준수 · ID 조작 금지 · 스키마 엄수 · 순수 JSON 반환 · 최대 3회 retry</div>
         </div>
       </div>
-      <div class="note" style="margin-top:10px;">코드 후처리: filterNonUiuxItems() ID 접두사 블랙리스트 필터 + getBusinessCategory() 업무분류 결정</div>
+      <div class="note" style="margin-top:10px;">코드 후처리: filterNonUiuxItems() ID 접두사 블랙리스트 필터 (복구 키워드 포함 시 통과) + getBusinessCategory() 업무분류 결정</div>
     </div>
   </div>
 
@@ -160,27 +160,28 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
       <div class="grid2">
         <div class="cell">
           <div class="cell-label">역할</div>
-          <div class="cell-val">중복 제거, 우선순위 분류(상/중/하), REQ-ID 재명명, 모호성 탐지, 요구사항 정의서 구조화.</div>
+          <div class="cell-val">중복 제거, 우선순위 분류(상/중/하), 모호성 탐지·자동보정, 요구사항 정의서 구조화. 원본 ID를 그대로 보존하며 신규 채번하지 않음.</div>
         </div>
         <div class="cell">
-          <div class="cell-label">REQ-ID 명명 규칙</div>
-          <div class="mono" style="font-size:10px;">REQ-{분류}-{L1 2자리}-{L2 3자리}<br>USR·ADM·SRV·API·UX·CMN·INT·NFR</div>
+          <div class="cell-label">ID 처리 방식</div>
+          <div class="mono" style="font-size:10px;">원본_ids: 원본 요구사항 ID 보존 (쉼표 구분)<br>LLM의 임의 ID 생성·변환·채번 금지</div>
+          <div class="warn-tag">&#9888; REQ-{분류}-{L1}-{L2} 채번 규칙 폐지됨</div>
         </div>
         <div class="cell">
           <div class="cell-label">출력 스키마</div>
           <div class="mono">optimization_summary{ }<br>optimized_requirements[ ]</div>
-          <div class="tags"><span class="tag">요구사항ID</span><span class="tag">우선순위</span><span class="tag">ambiguity_hitl</span><span class="tag">related_reqs</span></div>
+          <div class="tags"><span class="tag">원본_ids</span><span class="tag">우선순위</span><span class="tag">ambiguity_hitl</span><span class="tag">related_reqs</span></div>
         </div>
         <div class="cell">
-          <div class="cell-label">관계 유형</div>
-          <div class="tags" style="margin-top:0;"><span class="tag">중복</span><span class="tag">통합</span><span class="tag">연결</span><span class="tag">충돌</span></div>
+          <div class="cell-label">관계 유형 (6종)</div>
+          <div class="tags" style="margin-top:0;"><span class="tag">중복</span><span class="tag">통합</span><span class="tag">연결</span><span class="tag">충돌</span><span class="tag">전제조건</span><span class="tag">유사</span></div>
           <div class="cell-val" style="margin-top:6px;">→ related_reqs 배열에 기록</div>
         </div>
       </div>
       <div class="branch-row">
         <div class="branch">
           <div class="branch-title" style="color:#993C1D;">모호성 HITL 트리거</div>
-          <div class="branch-sub">is_ambiguous: true → original_text + 대안 2개 제시 → PM 판단 요청</div>
+          <div class="branch-sub">is_ambiguous: true → original_text + suggested_options 제시 → PM 판단 요청<br>is_ambiguous: false + corrected_text → AI 자동보정 완료 (일괄 검토 모달에서 확인 가능)</div>
         </div>
         <div class="branch">
           <div class="branch-title" style="color:#534AB7;">우선순위 판단</div>
@@ -200,7 +201,7 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
   <div class="card" id="c3" onclick="tog('c3')">
     <div class="card-head">
       <span class="step-pill">STEP 03</span>
-      <span class="card-title">충돌 검증 에이전트 (Verification)</span>
+      <span class="card-title">관계 분석 에이전트 (충돌·전제조건·유사)</span>
       <span class="badge badge-ai">AI Agent</span>
       <span class="expand-icon" id="ic3">[ 펼치기 ]</span>
     </div>
@@ -208,16 +209,17 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
       <div class="grid2">
         <div class="cell">
           <div class="cell-label">역할</div>
-          <div class="cell-val">요구사항 간 정책 충돌 탐지. conflict_id 생성, 관련 ID 배열화, 충돌 사유 및 대안 옵션 제시.</div>
+          <div class="cell-val">정책 충돌 탐지, 선행 요구사항(전제조건) 도출, 유사 항목 그룹핑. 구조화된 옵션(option_a/option_b)과 SPINE 추천안 제시.</div>
         </div>
         <div class="cell">
           <div class="cell-label">출력 스키마</div>
-          <div class="mono">conflicts[ ]</div>
-          <div class="tags"><span class="tag">conflict_id</span><span class="tag">involved_req_ids</span><span class="tag">conflict_reason</span><span class="tag">suggested_options</span></div>
+          <div class="mono">conflicts[ ]<br>prerequisite_relations[ ]<br>similar_reqs[ ]</div>
+          <div class="tags"><span class="tag">conflict_id</span><span class="tag">involved_req_ids</span><span class="tag">conflict_reason</span><span class="tag">option_a</span><span class="tag">option_b</span><span class="tag">recommendation</span><span class="tag">impact_scope</span></div>
+          <div class="tags" style="margin-top:4px;"><span class="tag">relation_id</span><span class="tag">prerequisite_id</span><span class="tag">dependent_ids</span><span class="tag">req_ids</span><span class="tag">similarity_summary</span><span class="tag">action</span></div>
         </div>
         <div class="cell">
           <div class="cell-label">HITL 트리거</div>
-          <div class="cell-val">충돌 감지 시 → PM 클릭으로 대안 선택 → optimized_requirements에 HITL 확정 항목 추가</div>
+          <div class="cell-val">충돌 감지 시 → 옵션 A/B (description + risk) 또는 직접 입력 → SPINE 추천안 참고 → PM 채택 → optimized_requirements에 확정 항목 추가</div>
         </div>
         <div class="cell">
           <div class="cell-label">재시도 정책</div>
@@ -240,8 +242,8 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="2" stroke="#3B6D11" stroke-width="1.2"/><line x1="5" y1="6" x2="11" y2="6" stroke="#3B6D11" stroke-width="1"/><line x1="5" y1="9" x2="11" y2="9" stroke="#3B6D11" stroke-width="1"/></svg>
       </div>
       <div>
-        <div class="out-label">요구사항정의서 탭</div>
-        <div class="out-sub">기능 / 비기능 / 충돌 / 원본 서브탭</div>
+        <div class="out-label">UIUX 선별 결과 탭</div>
+        <div class="out-sub">UIUX 선별 · 충돌 · 전제조건 · 유사항목</div>
       </div>
     </div>
     <div class="out-chip">
@@ -250,7 +252,7 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
       </div>
       <div>
         <div class="out-label">HITL 모달</div>
-        <div class="out-sub">모호성 · 충돌 PM 의사결정</div>
+        <div class="out-sub">충돌: 옵션 A/B + 직접입력 · 모호성: 일괄 검토 (검토필요/자동보정 구분)</div>
       </div>
     </div>
     <div class="out-chip">
@@ -259,7 +261,7 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
       </div>
       <div>
         <div class="out-label">Excel Export</div>
-        <div class="out-sub">요구사항정의서_SPINE.xlsx · 4 sheets</div>
+        <div class="out-sub">UIUX선별_SPINE.xlsx · 5 sheets (UIUX 선별 · 충돌 · 전제조건 · 유사항목 · 파이프라인)</div>
       </div>
     </div>
   </div>
@@ -297,7 +299,7 @@ body{font-family:'DM Sans',sans-serif;background:#FAFAF8;color:#292524;min-heigh
         <div class="cell" style="margin-top:14px;">
           <div class="cell-label">복구 키워드</div>
           <div class="tags" style="margin-top:8px;">
-            <span class="tag">화면</span><span class="tag">조회UI</span><span class="tag">노출</span><span class="tag">버튼</span><span class="tag">클릭</span><span class="tag">팝업</span><span class="tag">모달</span><span class="tag">입력폼</span><span class="tag">레이아웃</span><span class="tag">시각화 방식</span><span class="tag">컴포넌트 구조</span>
+            <span class="tag">화면</span><span class="tag">조회UI</span><span class="tag">노출</span><span class="tag">버튼</span><span class="tag">클릭</span><span class="tag">팝업</span><span class="tag">모달</span><span class="tag">입력폼</span><span class="tag">레이아웃</span><span class="tag">대시보드</span><span class="tag">위젯</span><span class="tag">메뉴</span><span class="tag">탭</span><span class="tag">검색</span><span class="tag">필터</span><span class="tag">정렬</span><span class="tag">페이징</span><span class="tag">알림</span><span class="tag">토스트</span>
           </div>
         </div>
         <div class="note" style="margin-top:10px;">STEP 1 제외 항목이 복구 키워드를 포함하면 'Conditional'로 분류 후 STEP 3 재판단</div>
