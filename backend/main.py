@@ -5,8 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig, Part
-import base64, json, os, tempfile, asyncio
-from concurrent.futures import ThreadPoolExecutor
+import base64, json, os, tempfile, asyncio, threading
 from typing import Optional
 from pathlib import Path
 
@@ -31,7 +30,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_executor = ThreadPoolExecutor(max_workers=4)
 
 @app.get("/health")
 async def health():
@@ -79,32 +77,41 @@ async def analyze(req: AnalyzeRequest):
     )
 
     async def stream_generator():
-        try:
-            loop = asyncio.get_event_loop()
-            # generate_content_stream()은 동기 — 이터레이터 생성만 executor에서 실행
-            stream = await loop.run_in_executor(
-                _executor,
-                lambda: model.generate_content(
+        q: asyncio.Queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def produce():
+            try:
+                responses = model.generate_content(
                     content_parts,
                     generation_config=gen_config,
                     stream=True,
-                ),
-            )
-            # 동기 이터레이터를 비동기로 소비
-            def read_chunks():
-                chunks = []
-                for chunk in stream:
+                )
+                for chunk in responses:
                     if chunk.text:
-                        chunks.append(chunk.text)
-                return chunks
+                        loop.call_soon_threadsafe(q.put_nowait, chunk.text)
+            except Exception as exc:
+                loop.call_soon_threadsafe(q.put_nowait, exc)
+            finally:
+                loop.call_soon_threadsafe(q.put_nowait, None)  # sentinel
 
-            chunks = await loop.run_in_executor(_executor, read_chunks)
-            for text in chunks:
-                yield f"data: {json.dumps({'token': text}, ensure_ascii=False)}\n\n"
+        thread = threading.Thread(target=produce, daemon=True)
+        thread.start()
 
+        try:
+            while True:
+                item = await q.get()
+                if item is None:
+                    break
+                if isinstance(item, Exception):
+                    yield f"data: {json.dumps({'error': str(item)}, ensure_ascii=False)}\n\n"
+                    return
+                yield f"data: {json.dumps({'token': item}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+        finally:
+            thread.join(timeout=5)
 
     return StreamingResponse(
         stream_generator(),
