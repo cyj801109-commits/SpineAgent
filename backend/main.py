@@ -98,6 +98,7 @@ async def analyze(req: AnalyzeRequest):
                     if chunk.text:
                         loop.call_soon_threadsafe(q.put_nowait, chunk.text)
             except Exception as exc:
+                print(f"[analyze] generate_content 실패: mode={req.mode} prompt_kind={prompt_kind} model={req.model} error={exc!r}")
                 loop.call_soon_threadsafe(q.put_nowait, exc)
             finally:
                 loop.call_soon_threadsafe(q.put_nowait, None)  # sentinel
