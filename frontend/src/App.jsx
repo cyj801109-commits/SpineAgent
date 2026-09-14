@@ -211,7 +211,18 @@ const App = () => {
         }, 1000);
     };
 
-    const processingSteps = [
+    // PM 모드는 UIUX 필터링/담당범위 분류 개념이 없으므로 Task1·Task2 단계 라벨을 별도로 둔다.
+    // 나머지 단계(데이터 파싱, 관계망 구축, 최적화 완료, 관계 분석, 검토지점)는 UIUX 전용 표현이 없어 공용 유지.
+    const processingSteps = mode === 'pm' ? [
+        { title: "데이터 파싱", desc: "텍스트 및 엑셀 데이터 추출 준비" },
+        { title: "관계망 구축 준비", desc: "파싱된 데이터 구조화" },
+        { title: "요구사항 전량 추출", desc: "필터링 없이 기능/비기능 요구사항 전체 확정 (API Task 1)" },
+        { title: "요구사항 추출 완료", desc: "전체 요구사항 통과 완료 (제외 없음)" },
+        { title: "요구사항 최적화 및 모호성 분석", desc: "업무시스템·업무구분·구분(기능·비기능) 유지 + 모호성 정량화 (API Task 2)" },
+        { title: "최적화 완료", desc: "표준 양식 매핑 완료" },
+        { title: "충돌·전제조건·유사 관계 분석", desc: "충돌 감지 + 선행 요구사항 도출 + 유사 항목 그룹핑 (API Task 3)" },
+        { title: "검토 지점 설정 완료", desc: "HITL 의사결정 노드 구성 완료" }
+    ] : [
         { title: "데이터 파싱", desc: "텍스트 및 엑셀 데이터 추출 준비" },
         { title: "관계망 구축 준비", desc: "파싱된 데이터 구조화" },
         { title: "UIUX 관련성 3단계 판단", desc: "데이터 아키텍처 제외 + 화면 설계 대상 확정 (API Task 1)" },
@@ -463,7 +474,132 @@ const App = () => {
         }
     };
 
-    const PipelineInfoView = () => (
+    const PipelineInfoView = () => mode === 'pm' ? (
+        <div className="p-8 max-w-4xl mx-auto space-y-10 text-primary">
+            <div>
+                <p className="text-[10px] font-bold tracking-widest uppercase text-accent mb-1 font-mono">SPINE · PIPELINE ARCHITECTURE</p>
+                <h2 className="text-2xl font-bold tracking-tight">PM 요구사항 최적화 기준</h2>
+                <p className="text-sm text-sub mt-1">파이프라인이 요구사항을 어떤 기준으로 추출·최적화·분석하는지 정의합니다. (필터링 없음)</p>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">파이프라인 구성 · 3 STAGE</p>
+                <div className="grid grid-cols-3 gap-4">
+                    {[
+                        { stage: "STAGE 01", title: "전량 추출", api: "API Task 1", desc: "도메인·업무구분·ID 접두사와 무관하게 모든 기능/비기능 요구사항을 필터링 없이 추출합니다.", color: "border-accent" },
+                        { stage: "STAGE 02", title: "최적화·정량화", api: "API Task 2", desc: "업무시스템/업무구분/구분(기능·비기능)을 그대로 유지한 채, 모호 표현을 정량 기준으로 구체화합니다.", color: "border-blue-400" },
+                        { stage: "STAGE 03", title: "관계 분석", api: "API Task 3", desc: "충돌·전제조건·유사 관계를 감지하고 HITL 의사결정 포인트를 설정합니다.", color: "border-rose-400" },
+                    ].map((s, i) => (
+                        <div key={i} className={`bg-white border-t-4 ${s.color} border border-borderline rounded-lg p-4 shadow-sm`}>
+                            <p className="text-[10px] font-mono font-bold text-sub uppercase tracking-widest">{s.stage} · {s.api}</p>
+                            <p className="text-base font-bold mt-1 mb-2">{s.title}</p>
+                            <p className="text-xs text-sub leading-relaxed">{s.desc}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">처리 원칙 · 필터링 없음</p>
+                <div className="space-y-3">
+                    {[
+                        {
+                            step: "원칙 1", label: "전량 통과",
+                            color: "bg-green-50 border-green-200", badge: "bg-green-100 text-green-700",
+                            items: [
+                                { tag: "제외 없음", desc: "UI/UX, 데이터 아키텍처, 보안, 인프라, 성능, PM 영역(WBS·일정·예산), 컴플라이언스 등 모든 영역을 예외 없이 포함" },
+                            ],
+                            note: "UIUX 모드의 STEP1~3 관련성 판단 로직은 이 모드에 적용하지 않음"
+                        },
+                        {
+                            step: "원칙 2", label: "업무 계층 유지",
+                            color: "bg-blue-50 border-blue-200", badge: "bg-blue-100 text-blue-700",
+                            items: [
+                                { tag: "업무시스템", desc: "원본 문서에서 결정론적으로 추출된 값을 그대로 유지" },
+                                { tag: "업무구분", desc: "원본 문서에서 결정론적으로 추출된 값을 그대로 유지" },
+                                { tag: "구분(기능·비기능)", desc: "원본 컬럼값 또는 시트명 기반으로 판별된 값을 그대로 유지, Task2가 재판단하지 않음" },
+                            ],
+                            note: null
+                        },
+                    ].map((s, i) => (
+                        <div key={i} className={`border rounded-lg p-5 ${s.color}`}>
+                            <div className="flex items-center gap-3 mb-3">
+                                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${s.badge}`}>{s.step}</span>
+                                <span className="text-sm font-bold">{s.label}</span>
+                            </div>
+                            <div className="space-y-1.5">
+                                {s.items.map((item, j) => (
+                                    <div key={j} className="flex gap-3 text-xs">
+                                        <span className="font-bold shrink-0 w-28">{item.tag}</span>
+                                        <span className="text-sub">{item.desc}</span>
+                                    </div>
+                                ))}
+                            </div>
+                            {s.note && <p className="text-[11px] text-sub mt-3 italic border-t border-current/10 pt-2">{s.note}</p>}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">요구사항 관계 유형 · relation_type</p>
+                <div className="bg-white border border-borderline rounded-lg overflow-hidden shadow-sm">
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="bg-pagebg border-b border-borderline">
+                                <th className="p-3 text-left font-bold w-28">유형</th>
+                                <th className="p-3 text-left font-bold">정의</th>
+                                <th className="p-3 text-left font-bold w-24">감지 단계</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-borderline">
+                            {[
+                                { type: "중복", def: "내용이 거의 동일하여 하나로 합칠 수 있는 요구사항", stage: "STAGE 02" },
+                                { type: "통합", def: "방향이 같아 묶어서 처리 가능한 요구사항", stage: "STAGE 02" },
+                                { type: "연결", def: "서로 다른 담당·영역이지만 연동되는 요구사항", stage: "STAGE 02" },
+                                { type: "충돌", def: "내용이 서로 모순되거나 구현 방향이 상반되는 요구사항", stage: "STAGE 03" },
+                                { type: "전제조건", def: "해당 요구사항 구현 전에 반드시 완료되어야 하는 선행 요구사항", stage: "STAGE 03" },
+                                { type: "유사", def: "내용이 비슷하지만 범위·대상이 달라 통합 전 검토가 필요한 요구사항", stage: "STAGE 03" },
+                            ].map((r, i) => (
+                                <tr key={i} className="hover:bg-pagebg">
+                                    <td className="p-3 font-mono font-bold text-accent">{r.type}</td>
+                                    <td className="p-3 text-sub">{r.def}</td>
+                                    <td className="p-3 font-mono text-[10px] text-sub">{r.stage}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div>
+                <p className="text-xs font-bold tracking-widest uppercase text-sub mb-4">모호 표현 구체화 기준 (전 도메인 대상)</p>
+                <div className="bg-white border border-borderline rounded-lg overflow-hidden shadow-sm">
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="bg-pagebg border-b border-borderline">
+                                <th className="p-3 text-left font-bold">모호 표현</th>
+                                <th className="p-3 text-left font-bold">구체화 기준</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-borderline">
+                            {[
+                                { vague: "빠른 응답", concrete: "API P95 응답 3초 이내" },
+                                { vague: "대용량 처리", concrete: "동시접속 1,000건, TPS 500 이상 처리" },
+                                { vague: "안전한 인증", concrete: "MFA 적용, 세션 타임아웃 30분" },
+                                { vague: "데이터 정합성 확보", concrete: "일 배치 정합성 검증 오차율 0.01% 이내" },
+                            ].map((r, i) => (
+                                <tr key={i} className="hover:bg-pagebg">
+                                    <td className="p-3 text-sub line-through opacity-60">{r.vague}</td>
+                                    <td className="p-3 font-bold text-primary">{r.concrete}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    ) : (
         <div className="p-8 max-w-4xl mx-auto space-y-10 text-primary">
             <div>
                 <p className="text-[10px] font-bold tracking-widest uppercase text-accent mb-1 font-mono">SPINE · PIPELINE ARCHITECTURE</p>
