@@ -1049,6 +1049,12 @@ UI/UX뿐 아니라 성능·보안·데이터정합성·인프라 등 모든 도�
             setRawFunc(validFunc);
             setRawNonFunc(llmExcluded);
             setRawExcluded(codeExcluded);
+            if (mode === 'pm') {
+                // 진단 로그: Task1(pmTask1) 산출 시점의 원본ID/업무시스템/업무구분/구분 값 — Task2 이후 값과 비교용
+                console.log('[PM 진단] Task1 산출 결과 (validFunc):', validFunc.map(r => ({
+                    id: r.id, 업무시스템: r.업무시스템, 업무구분: r.업무구분, 구분: r.구분, _source_sheet: r._source_sheet,
+                })));
+            }
             setProgressStep(3);
 
             // Task 2: 최적화 및 구체화 에이전트
@@ -1122,6 +1128,14 @@ UI/UX뿐 아니라 성능·보안·데이터정합성·인프라 등 모든 도�
 }`;
 
             const optimizedData = await callBackendAPI(JSON.stringify(extractedData), activeCoreSystemPrompt, mode === 'pm' ? schema2Pm : schema2);
+            if (mode === 'pm') {
+                // 진단 로그: Task2가 실제로 반환한 원문 값 (안전망 적용 전) — 재채번/값 대체 여부 확인용
+                console.log('[PM 진단] Task2 raw 응답 (안전망 적용 전):', (optimizedData.optimized_requirements || []).map(item => ({
+                    원본_ids: item.원본_ids,
+                    related_target_ids: item.related_reqs?.map(r => r.target_id),
+                    업무시스템: item.업무시스템, 업무구분: item.업무구분, 구분: item.구분,
+                })));
+            }
             const actualSelectedCount = optimizedData.optimized_requirements?.length || 0;
             setMetrics({
                 ...optimizedData.optimization_summary,
@@ -1133,6 +1147,10 @@ UI/UX뿐 아니라 성능·보안·데이터정합성·인프라 등 모든 도�
                 const firstId = (item.원본_ids || '').split(',')[0]?.trim() || item.related_reqs?.[0]?.target_id || '';
                 const originalItem = validFunc.find(r => r.id === firstId);
                 if (mode === 'pm') {
+                    if (!originalItem) {
+                        // 진단 로그: firstId로 원본 항목을 못 찾음 — Task2가 ID를 원본과 다르게 반환했다는 뜻
+                        console.warn('[PM 진단] 원본 매칭 실패 — Task2가 반환한 firstId가 Task1 산출 ID와 불일치:', firstId, '(원본_ids 원문:', item.원본_ids, ')');
+                    }
                     // 안전망: Task2가 값을 비워 보내는 경우에만 원본 파싱값으로 채움(재판단 결과를 덮지 않음)
                     return {
                         ...item,
@@ -1150,6 +1168,11 @@ UI/UX뿐 아니라 성능·보안·데이터정합성·인프라 등 모든 도�
                     구성_소: originalItem?.구성_소 || item.구성_소,
                 };
             });
+            if (mode === 'pm') {
+                console.log('[PM 진단] 안전망 적용 후 최종 optReqs:', optReqs.map(r => ({
+                    원본_ids: r.원본_ids, 업무시스템: r.업무시스템, 업무구분: r.업무구분, 구분: r.구분,
+                })));
+            }
             setOptimizedReqs(optReqs);
             setProgressStep(5);
 
