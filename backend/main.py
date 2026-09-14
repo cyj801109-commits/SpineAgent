@@ -46,9 +46,16 @@ class AnalyzeRequest(BaseModel):
     schema: str
     pdf_files: Optional[list[PdfFile]] = None
     temperature: Optional[float] = 0.2
+    mode: Optional[str] = None
 
 @app.post("/api/analyze")
 async def analyze(req: AnalyzeRequest):
+    # PM/UIUX 모드별로 올바른 프롬프트가 실제로 호출되는지 Railway 로그로 재확인하기 위한 지점
+    prompt_kind = "PM" if "PM(프로젝트 관리자)" in req.systemInstruction else (
+        "UIUX" if "UIUX 기획자" in req.systemInstruction else "UNKNOWN"
+    )
+    print(f"[analyze] mode={req.mode} prompt_kind={prompt_kind} model={req.model}")
+
     full_prompt = (
         f"{req.prompt}\n\n"
         f"위 데이터를 분석하여 아래 JSON 스키마 구조로만 정확하게 출력하라. "

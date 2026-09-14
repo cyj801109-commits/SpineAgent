@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import { runPmTask1 } from './pmTask1.js';
 
 const MAX_EXCEL_ROWS = 300;
 const MAX_COMBINED_CHARS = 80000;
@@ -158,6 +159,8 @@ const Edit2 = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24"
 const Download = ({size=14}) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>;
 
 const App = () => {
+    // 모드 스위치: UIUX(기존 기본 흐름) / PM(2단계 신규 추가). 진입 기본값은 UIUX 유지.
+    const [mode, setMode] = useState('uiux');
     const [apiModel, setApiModel] = useState('gemini-2.5-flash');
     const [showSettings, setShowSettings] = useState(false);
     const [inputText, setInputText] = useState('');
@@ -184,6 +187,9 @@ const App = () => {
 
     // Tab State
     const [activeTab, setActiveTab] = useState('UIUX 선별');
+    // PM 모드는 필터링(선별) 개념이 없으므로 결과 탭 라벨을 구분한다.
+    const resultTabKey = mode === 'pm' ? 'PM 결과' : 'UIUX 선별';
+    const tabList = mode === 'pm' ? ['PM 결과', '충돌', '파이프라인'] : ['UIUX 선별', '충돌', '파이프라인'];
     const [selectedItem, setSelectedItem] = useState(null);
     const [isFullScreen, setIsFullScreen] = useState(false);
 
@@ -282,21 +288,33 @@ const App = () => {
     const exportToExcel = () => {
         const wb = XLSX.utils.book_new();
 
-        // ① UIUX 선별 시트 — optimizedReqs 기반 (Task 2 결과)
+        // ① 결과 시트 — optimizedReqs 기반 (Task 2 결과). UIUX/PM 모드에 따라 컬럼 구성이 다르다.
         if (optimizedReqs.length > 0) {
-            const ws1 = XLSX.utils.json_to_sheet(optimizedReqs.map(m => ({
-                "원본ID": m.원본_ids || m.related_reqs?.map(r=>r.target_id).join(', ')||'-',
-                "업무분류": m.업무분류||'-', "업무_대": m.업무_대||'-', "기능_중": m.기능_중||'-', "구성_소": m.구성_소||'-',
-                "분류/유형": `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`,
-                "요구정의명": m.요구정의명||'-', "상세내용": m.고객_요구사항_상세_내용||'-',
-                "연관요구사항": m.related_reqs?.map(r=>`${r.target_id}(${r.relation_type})`).join(', ')||'-',
-                "우선순위": m.우선순위||'-',
-                "모호성_상태": m.ambiguity_hitl?.is_ambiguous ? '검토필요' : (m.ambiguity_hitl?.corrected_text && m.ambiguity_hitl?.original_text !== m.ambiguity_hitl?.corrected_text) ? '자동보정' : '-',
-                "모호성_원문": m.ambiguity_hitl?.original_text||'-',
-                "모호성_보정": m.ambiguity_hitl?.corrected_text||'-',
-                "모호성_사유": m.ambiguity_hitl?.ambiguity_reason||'-'
-            })));
-            XLSX.utils.book_append_sheet(wb, ws1, "UIUX 선별");
+            const ws1 = XLSX.utils.json_to_sheet(optimizedReqs.map(m => (
+                mode === 'pm' ? {
+                    "원본ID": m.원본_ids || m.related_reqs?.map(r=>r.target_id).join(', ')||'-',
+                    "업무시스템": m.업무시스템||'-', "업무구분": m.업무구분||'-', "구분(기능/비기능)": m.구분||'-',
+                    "요구정의명": m.요구정의명||'-', "상세내용": m.고객_요구사항_상세_내용||'-',
+                    "연관요구사항": m.related_reqs?.map(r=>`${r.target_id}(${r.relation_type})`).join(', ')||'-',
+                    "우선순위": m.우선순위||'-',
+                    "모호성_상태": m.ambiguity_hitl?.is_ambiguous ? '검토필요' : (m.ambiguity_hitl?.corrected_text && m.ambiguity_hitl?.original_text !== m.ambiguity_hitl?.corrected_text) ? '자동보정' : '-',
+                    "모호성_원문": m.ambiguity_hitl?.original_text||'-',
+                    "모호성_보정": m.ambiguity_hitl?.corrected_text||'-',
+                    "모호성_사유": m.ambiguity_hitl?.ambiguity_reason||'-'
+                } : {
+                    "원본ID": m.원본_ids || m.related_reqs?.map(r=>r.target_id).join(', ')||'-',
+                    "업무분류": m.업무분류||'-', "업무_대": m.업무_대||'-', "기능_중": m.기능_중||'-', "구성_소": m.구성_소||'-',
+                    "분류/유형": `${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`,
+                    "요구정의명": m.요구정의명||'-', "상세내용": m.고객_요구사항_상세_내용||'-',
+                    "연관요구사항": m.related_reqs?.map(r=>`${r.target_id}(${r.relation_type})`).join(', ')||'-',
+                    "우선순위": m.우선순위||'-',
+                    "모호성_상태": m.ambiguity_hitl?.is_ambiguous ? '검토필요' : (m.ambiguity_hitl?.corrected_text && m.ambiguity_hitl?.original_text !== m.ambiguity_hitl?.corrected_text) ? '자동보정' : '-',
+                    "모호성_원문": m.ambiguity_hitl?.original_text||'-',
+                    "모호성_보정": m.ambiguity_hitl?.corrected_text||'-',
+                    "모호성_사유": m.ambiguity_hitl?.ambiguity_reason||'-'
+                }
+            )));
+            XLSX.utils.book_append_sheet(wb, ws1, mode === 'pm' ? "PM 요구사항" : "UIUX 선별");
         }
 
         // ② 충돌 시트
@@ -332,7 +350,7 @@ const App = () => {
             return;
         }
 
-        XLSX.writeFile(wb, "UIUX선별_SPINE.xlsx");
+        XLSX.writeFile(wb, mode === 'pm' ? "PM요구사항_SPINE.xlsx" : "UIUX선별_SPINE.xlsx");
     };
 
     // HITL에서 PM이 채택/수정한 값을 실시간 요구사항정의서(optimizedReqs)에 반영
@@ -377,7 +395,8 @@ const App = () => {
                         systemInstruction: systemInstruction,
                         schema: schemaDefinition,
                         pdf_files: pdfFiles,
-                        temperature: temperature
+                        temperature: temperature,
+                        mode: mode
                     })
                 });
 
@@ -730,6 +749,77 @@ STEP 3. 최종 판단 기준:
 
 `;
 
+            // PM 모드용 Task2·Task3 시스템 프롬프트.
+            // Task2/Task3 자체(호출 흐름·schema3·관계분석 로직)는 모드 구분 없이 공용 재사용하되,
+            // Task2/3에 전달되는 시스템 프롬프트만 모드에 따라 분기한다(coreSystemPrompt는 UIUX 전용이라
+            // 한 글자도 수정하지 않음). PM 모드 입력은 이미 pmTask1에서 업무시스템/업무구분/구분을
+            // 결정론적으로 산출했으므로, Task2가 이를 UIUX 기준으로 재판단·무시하지 않고 그대로
+            // 신뢰해 유지하도록 명시한다. 필터링(excluded_reqs) 개념도 PM 모드에는 존재하지 않는다.
+            const pmTask23SystemPrompt = `당신은 14년 경력의 SI PM(프로젝트 관리자)으로,
+RFP 및 요구사항 문서에서 모든 기능/비기능 요구사항을 필터링 없이 최적화·구체화하는 전문가임.
+
+[처리 원칙 — 반드시 준수]
+어떠한 요구사항 항목도 도메인·업무구분·ID 접두사를 이유로 제외하지 않는다.
+UIUX 관련성 판단(STEP1~3)은 이 모드에 적용하지 않는다. 입력된 요구사항은 이미
+필터링이 완료되지 않은 전체 항목이며, 최적화(통합·연결 관계 분석) 대상으로만 처리한다.
+
+[업무 계층 유지 기준 — 반드시 준수]
+입력 항목에는 이미 업무시스템/업무구분/구분(기능·비기능)이 원본 문서에서 결정론적으로
+채워져 있다. 이 값들을 그대로 출력에 복사해 유지할 것. UIUX 판단 기준이나 임의의
+재분류로 덮어쓰거나 새로 판단하지 말 것. 입력값이 빈 문자열인 경우에만 빈 문자열로 둘 것.
+
+[요구사항 최적화 판단 — Candidate 유형]
+선별 없이 전체 요구사항을 대상으로 아래 유형으로 분류하여 related_reqs에 반영한다.
+어떤 항목도 "범위 외"를 이유로 제외하지 않는다(excluded_reqs 개념 없음).
+- Merge Candidate: 유사 기능·공통 정책으로 통합 가능한 요구사항 → relation_type: "통합"
+- Split Candidate: 서로 다른 담당·영역이 혼재된 요구사항 → relation_type: "연결"
+- Re-scope Candidate: 현재 범위 초과·의존성 미충족 → 제약사항 필드에 명시
+
+[모호 표현 구체화 — 반드시 적용, 모든 도메인 대상]
+UI/UX뿐 아니라 성능·보안·데이터정합성·인프라 등 모든 도메인의 추상적 표현을 측정 가능한
+정량 수치로 재서술한다.
+- (성능 예시) "빠른 응답" → "API P95 응답 3초 이내"
+- (성능 예시) "대용량 처리" → "동시접속 1,000건, TPS 500 이상 처리"
+- (보안 예시) "안전한 인증" → "MFA 적용, 세션 타임아웃 30분"
+- (데이터정합성 예시) "데이터 정합성 확보" → "일 배치 정합성 검증 오차율 0.01% 이내"
+- 위 예시처럼 도메인에 관계없이 측정 가능한 기준으로 반드시 재서술할 것
+- 모호 표현 탐지 대상: 수치 불명확("일부", "적절히", "빠르게", "충분히" 등),
+  범위 불명확("관련 데이터", "필요한 경우", "기타", "등" 등),
+  기준 불명확("최적화된", "효율적인", "안정적인" 등)
+- 모호 표현 보정 시 반드시:
+  ambiguity_hitl.original_text: 원문 모호 표현 (보정 여부와 무관하게 반드시 채울 것)
+  ambiguity_hitl.corrected_text: 보정된 구체적 표현
+  ambiguity_hitl.ambiguity_reason: 왜 모호한지 사유
+  자동 보정 완료 → is_ambiguous: false, corrected_text 포함
+  보정 불가 → is_ambiguous: true, suggested_options 제시
+- 모호 표현이 없는 항목도 original_text에 해당 요구사항의 핵심 문장을 기재할 것
+
+[데이터 무결성 규칙]
+1. 입력 항목의 원본ID를 그대로 사용할 것. 절대 임의로 생성, 변환, 채번하지 말 것.
+2. optimized_requirements의 각 항목에는 반드시 원본_ids 필드를 채울 것.
+   원본_ids: 이 항목이 파생/통합된 원본 요구사항 ID를 쉼표 구분으로 기입.
+   related_reqs도 반드시 1개 이상 포함하고 target_id를 채울 것. 빈 배열 금지.
+3. 물리적 행 순서 유지, 임의 정렬 금지
+4. JSON 스키마 외 텍스트 추가 금지
+5. 상세내용은 핵심만 간결하게 요약하여 출력 제한 방지
+
+[우선순위 판단 기준 — 반드시 "상"/"중"/"하" 중 하나를 채울 것. 빈값 금지]
+- 상: 서비스 핵심 기능, 사용자 직접 체감, 미구현 시 서비스 불가
+- 중: 품질/편의 향상, 없어도 서비스 가능하나 사용성 저하
+- 하: 부가 기능, 향후 개선 가능, 미구현 시 영향 미미
+
+[relation_type 정의]
+- 중복: 내용이 거의 동일하여 하나로 합칠 수 있는 요구사항
+- 통합: 방향이 같아 묶어서 처리 가능한 요구사항
+- 연결: 서로 다른 담당·영역이지만 연동되는 요구사항
+- 충돌: 내용이 서로 모순되거나 구현 방향이 상반되는 요구사항
+- 전제조건: 해당 요구사항 구현 전에 반드시 완료되어야 하는 요구사항
+- 유사: 내용이 비슷하지만 범위나 대상이 달라 통합 전 검토가 필요한 요구사항
+
+`;
+            // Task2·Task3에 전달할 시스템 프롬프트 (모드 분기, UIUX 원문은 위에서 전혀 수정하지 않음)
+            const activeCoreSystemPrompt = mode === 'pm' ? pmTask23SystemPrompt : coreSystemPrompt;
+
             // Task 1: 추출 에이전트 (자동 청킹)
             setProgressStep(2); startStepTimer();
             const schema1 = `{
@@ -755,7 +845,11 @@ STEP 3. 최종 판단 기준:
             const mergedFunc = [];
             const mergedExcluded = [];
 
-            if (excelFiles.length > 0) {
+            if (mode === 'pm') {
+                // PM 모드 Task1: UIUX 필터링 없이 pmTask1.js 로직으로 전량 추출 (pmTask1.js 참조)
+                const pmResult = await runPmTask1({ combinedText, excelFiles, pdfFilesB64, callBackendAPI });
+                mergedFunc.push(...(pmResult.requirements || []));
+            } else if (excelFiles.length > 0) {
                 // Excel 직접 파싱 — LLM Task 1 건너뜀 (결정론적)
                 for (const ef of excelFiles) {
                     const parsed = await parseExcelToRequirements(ef);
@@ -796,14 +890,25 @@ STEP 3. 최종 판단 기준:
                 }
             }
 
-            // 업무분류를 ID 접두사 기반으로 결정론적으로 덮어쓰기
-            for (const item of mergedFunc) {
-                const codeBiz = getBusinessCategory(item.id);
-                if (codeBiz) item.업무분류 = codeBiz;
+            let validFunc, llmExcluded, codeExcluded;
+            if (mode === 'pm') {
+                // PM 모드: UIUX ID 접두사 기반 업무분류 재산정도, 코드 필터링도 적용하지 않는다 (제외 개념 없음)
+                validFunc = mergedFunc;
+                llmExcluded = [];
+                codeExcluded = [];
+            } else {
+                // 업무분류를 ID 접두사 기반으로 결정론적으로 덮어쓰기
+                for (const item of mergedFunc) {
+                    const codeBiz = getBusinessCategory(item.id);
+                    if (codeBiz) item.업무분류 = codeBiz;
+                }
+                ({ filtered: validFunc, llmExcluded, codeExcluded } = filterNonUiuxItems(mergedFunc, mergedExcluded));
             }
-
-            const { filtered: validFunc, llmExcluded, codeExcluded } = filterNonUiuxItems(mergedFunc, mergedExcluded);
-            const extractedData = { uiux_functional_reqs: validFunc, excluded_reqs: [...llmExcluded, ...codeExcluded] };
+            // PM 모드는 excluded_reqs 개념이 없으므로 Task2 입력 JSON에도 그 키를 넣지 않는다
+            // (모델이 "uiux_functional_reqs"라는 키 이름 때문에 UIUX 필터링을 연상하지 않도록 분리).
+            const extractedData = mode === 'pm'
+                ? { requirements: validFunc }
+                : { uiux_functional_reqs: validFunc, excluded_reqs: [...llmExcluded, ...codeExcluded] };
             const actualTotalCount = validFunc.length + llmExcluded.length + codeExcluded.length;
             setRawFunc(validFunc);
             setRawNonFunc(llmExcluded);
@@ -846,7 +951,41 @@ STEP 3. 최종 판단 기준:
   ]
 }`;
 
-            const optimizedData = await callBackendAPI(JSON.stringify(extractedData), coreSystemPrompt, schema2);
+            // PM 모드 schema2: UIUX 전용 필드(업무분류/업무_대/기능_중/구성_소) 대신
+            // pmTask1이 이미 산출한 업무시스템/업무구분/구분 taxonomy를 그대로 사용한다.
+            const schema2Pm = `{
+  "optimization_summary": {
+    "ambiguity_resolved_count": 0,
+    "selection_reason": "최적화 판단 근거 요약"
+  },
+  "optimized_requirements": [
+    {
+      "원본_ids": "이 항목의 원본 요구사항 ID (쉼표 구분, 반드시 1개 이상 채울 것)",
+      "업무시스템": "입력값 그대로 유지",
+      "업무구분": "입력값 그대로 유지",
+      "구분": "입력값 그대로 유지 (기능/비기능 등, 절대 재판단하지 말 것)",
+      "요구정의명": "명확한 기능명",
+      "고객_요구사항_상세_내용": "모호성 제거된 구체적 요건",
+      "우선순위": "상/중/하",
+      "related_reqs": [
+        {
+          "target_id": "원본ID",
+          "relation_type": "중복/통합/연결/전제조건/유사",
+          "reason": "Merge·Split·Re-scope 판단 근거"
+        }
+      ],
+      "ambiguity_hitl": {
+        "is_ambiguous": false,
+        "original_text": "원문 그대로 보존",
+        "ambiguity_reason": "모호 사유",
+        "corrected_text": "AI가 자동 보정한 확정 텍스트",
+        "suggested_options": ["정량 대안1", "정량 대안2"]
+      }
+    }
+  ]
+}`;
+
+            const optimizedData = await callBackendAPI(JSON.stringify(extractedData), activeCoreSystemPrompt, mode === 'pm' ? schema2Pm : schema2);
             const actualSelectedCount = optimizedData.optimized_requirements?.length || 0;
             setMetrics({
                 ...optimizedData.optimization_summary,
@@ -857,6 +996,15 @@ STEP 3. 최종 판단 기준:
             const optReqs = (optimizedData.optimized_requirements || []).map(item => {
                 const firstId = (item.원본_ids || '').split(',')[0]?.trim() || item.related_reqs?.[0]?.target_id || '';
                 const originalItem = validFunc.find(r => r.id === firstId);
+                if (mode === 'pm') {
+                    // 안전망: Task2가 값을 비워 보내는 경우에만 원본 파싱값으로 채움(재판단 결과를 덮지 않음)
+                    return {
+                        ...item,
+                        업무시스템: item.업무시스템 || originalItem?.업무시스템 || '',
+                        업무구분: item.업무구분 || originalItem?.업무구분 || '',
+                        구분: item.구분 || originalItem?.구분 || '',
+                    };
+                }
                 const codeBiz = getBusinessCategory(firstId);
                 return {
                     ...item,
@@ -905,7 +1053,7 @@ STEP 3. 최종 판단 기준:
   ]
 }`;
 
-            const conflictData = await callBackendAPI(JSON.stringify(optimizedData.optimized_requirements), coreSystemPrompt, schema3);
+            const conflictData = await callBackendAPI(JSON.stringify(optimizedData.optimized_requirements), activeCoreSystemPrompt, schema3);
             setConflicts(conflictData.conflicts || []);
             setPrerequisiteRelations(conflictData.prerequisite_relations || []);
             setSimilarReqs(conflictData.similar_reqs || []);
@@ -919,7 +1067,7 @@ STEP 3. 최종 판단 기준:
             }
             setProgressStep(7);
 
-            setActiveTab('UIUX 선별');
+            setActiveTab(resultTabKey);
         } catch (e) {
             setErrorMessage(`[Step ${progressStep + 1} 실패] ${e.message}`);
         } finally {
@@ -993,11 +1141,25 @@ STEP 3. 최종 판단 기준:
                 <div className="flex items-center gap-4 text-primary">
                     <div className="w-10 h-10 bg-primary rounded flex items-center justify-center text-white"><Layers /></div>
                     <div>
-                        <h1 className="text-xl tracking-tight leading-none font-bold">UIUX 요구사항 선별 에이전트</h1>
-                        <p className="text-[10px] text-sub tracking-widest uppercase mt-1 font-bold">UIUX 검토 대상 필터링</p>
+                        <h1 className="text-xl tracking-tight leading-none font-bold">{mode === 'pm' ? 'PM 요구사항 추출 에이전트' : 'UIUX 요구사항 선별 에이전트'}</h1>
+                        <p className="text-[10px] text-sub tracking-widest uppercase mt-1 font-bold">{mode === 'pm' ? '필터링 없이 전체 요구사항 정량화' : 'UIUX 검토 대상 필터링'}</p>
                     </div>
                 </div>
                 <div className="flex items-center gap-4">
+                    <div className="flex items-center bg-pagebg border border-borderline rounded p-1 gap-1">
+                        <button
+                            onClick={() => setMode('uiux')}
+                            disabled={isAnalyzing}
+                            className={`px-3 py-1.5 rounded text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${mode === 'uiux' ? 'bg-accent text-white shadow-sm' : 'text-sub hover:text-primary'}`}>
+                            UIUX 모드
+                        </button>
+                        <button
+                            onClick={() => setMode('pm')}
+                            disabled={isAnalyzing}
+                            className={`px-3 py-1.5 rounded text-[11px] font-bold uppercase tracking-widest transition-all disabled:opacity-50 ${mode === 'pm' ? 'bg-accent text-white shadow-sm' : 'text-sub hover:text-primary'}`}>
+                            PM 모드
+                        </button>
+                    </div>
                     <button onClick={() => window.open('/spine-pipeline.html', '_blank')} className="flex items-center gap-2 bg-white hover:bg-pagebg px-3 py-1.5 rounded border border-borderline text-sub hover:text-primary transition-all active:scale-95">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>
                         <span className="text-[10px] font-bold uppercase tracking-widest">Pipeline</span>
@@ -1070,8 +1232,11 @@ STEP 3. 최종 판단 기준:
                         <div className="bg-white p-6 rounded-lg border border-borderline shadow-sm animate-in fade-in shrink-0">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-4">
                                 <div className="bg-white rounded-lg p-5 border border-borderline shadow-sm flex flex-col justify-center">
-                                    <p className="text-[11px] font-bold uppercase text-sub mb-1">UIUX 선별</p>
-                                    <p className="text-3xl font-bold text-accent">{metrics.uiux_selected_count}<span className="text-sm ml-1 font-bold text-sub">/{metrics.total_input_count}</span></p>
+                                    <p className="text-[11px] font-bold uppercase text-sub mb-1">{mode === 'pm' ? '전체 요구사항' : 'UIUX 선별'}</p>
+                                    {mode === 'pm'
+                                        ? <p className="text-3xl font-bold text-accent">{metrics.total_input_count}<span className="text-sm ml-1 font-bold text-sub">건</span></p>
+                                        : <p className="text-3xl font-bold text-accent">{metrics.uiux_selected_count}<span className="text-sm ml-1 font-bold text-sub">/{metrics.total_input_count}</span></p>
+                                    }
                                 </div>
                                 <div className="bg-white rounded-lg p-5 border border-borderline shadow-sm flex flex-col justify-center cursor-pointer hover:border-accent transition-colors" onClick={() => setShowAmbiguityModal(true)}>
                                     <p className="text-[11px] font-bold text-sub mb-1">모호성 보정</p>
@@ -1089,8 +1254,8 @@ STEP 3. 최종 판단 기준:
                     <div className="flex flex-col flex-1 min-h-[400px] relative w-full min-w-0">
                         {!isAnalyzing && metrics && !errorMessage && (
                             <div className="flex gap-0 px-2 shrink-0 overflow-x-auto text-primary z-20 relative">
-                                {['UIUX 선별', '충돌', '파이프라인'].map(tab => {
-                                    const count = tab === 'UIUX 선별' ? optimizedReqs.length : tab === '충돌' ? conflicts.length + prerequisiteRelations.length + similarReqs.length : null;
+                                {tabList.map(tab => {
+                                    const count = tab === resultTabKey ? optimizedReqs.length : tab === '충돌' ? conflicts.length + prerequisiteRelations.length + similarReqs.length : null;
                                     return (
                                     <button key={tab}
                                             onClick={() => setActiveTab(tab)}
@@ -1153,12 +1318,12 @@ STEP 3. 최종 판단 기준:
                                     {!isAnalyzing && !metrics && !errorMessage && (
                                         <div className="h-full flex flex-col items-center justify-center text-sub py-40">
                                             <Layers size={48} className="mb-4 text-borderline" />
-                                            <p className="text-lg font-bold tracking-tight text-primary mb-2 uppercase">"요구사항 전체에서 UIUX 담당자의 검토 항목을 추려냅니다."</p>
-                                            <p className="text-sm font-normal text-sub max-w-sm text-center">화면 설계에 영향을 주는 모든 요구사항을 담당 범위별로 분류하여 추출합니다.</p>
+                                            <p className="text-lg font-bold tracking-tight text-primary mb-2 uppercase">{mode === 'pm' ? '"필터링 없이 전체 요구사항을 추출하고 모호 표현을 정량화합니다."' : '"요구사항 전체에서 UIUX 담당자의 검토 항목을 추려냅니다."'}</p>
+                                            <p className="text-sm font-normal text-sub max-w-sm text-center">{mode === 'pm' ? '기능/비기능 요구사항을 예외 없이 전부 포함하여 담당 범위 없이 정량 기준으로 구체화합니다.' : '화면 설계에 영향을 주는 모든 요구사항을 담당 범위별로 분류하여 추출합니다.'}</p>
                                         </div>
                                     )}
 
-                                    {!isAnalyzing && !errorMessage && activeTab === 'UIUX 선별' && (optimizedReqs.length > 0) && (() => {
+                                    {!isAnalyzing && !errorMessage && mode === 'uiux' && activeTab === 'UIUX 선별' && (optimizedReqs.length > 0) && (() => {
                                         return (
                                         <table className="w-full text-left text-xs border-collapse min-w-[1400px] bg-white text-primary">
                                             <thead className="sticky top-0 bg-pagebg text-[11px] uppercase tracking-widest text-sub border-b border-borderline z-10 font-bold">
@@ -1186,6 +1351,61 @@ STEP 3. 최종 판단 기준:
                                                         <td className="p-4 text-sub border-r border-borderline">{m.기능_중||'-'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{m.구성_소||'-'}</td>
                                                         <td className="p-4 text-sub border-r border-borderline">{`${m.요구사항유형분류?.분류||'-'}/${m.요구사항유형분류?.유형||'-'}`}</td>
+                                                        <td className="p-4 font-bold text-primary border-r border-borderline min-w-[160px]">{m.요구정의명||'-'}</td>
+                                                        <td className="p-4 text-sub leading-relaxed border-r border-borderline min-w-[260px]">{m.고객_요구사항_상세_내용||'-'}</td>
+                                                        <td className="p-4 border-r border-borderline min-w-[160px]">
+                                                            {renderBadges(m.related_reqs)}
+                                                            {m.ambiguity_hitl && (
+                                                                <div className="relative mt-2 inline-block"
+                                                                    onMouseEnter={() => setHoveredAmbiguity(`main-${i}`)}
+                                                                    onMouseLeave={() => setHoveredAmbiguity(null)}>
+                                                                    {m.ambiguity_hitl.is_ambiguous
+                                                                        ? <div className="inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent cursor-help"><AlertTriangle size={10}/> 모호성 HITL</div>
+                                                                        : <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-300 cursor-help"><CheckCircle size={10}/> 보정완료</div>
+                                                                    }
+                                                                    {hoveredAmbiguity === `main-${i}` && (
+                                                                        <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-borderline rounded-lg shadow-lg p-3 w-72 text-xs">
+                                                                            <div className="mb-2"><span className="text-[10px] font-bold text-sub uppercase">원문</span><p className="text-sub mt-1 leading-relaxed">{m.ambiguity_hitl.original_text || '-'}</p></div>
+                                                                            {m.ambiguity_hitl.is_ambiguous
+                                                                                ? <div><span className="text-[10px] font-bold text-accent uppercase">대안</span>{m.ambiguity_hitl.suggested_options?.map((o,j) => <p key={j} className="text-primary mt-1">· {o}</p>)}</div>
+                                                                                : <div><span className="text-[10px] font-bold text-green-600 uppercase">보정</span><p className="text-green-700 mt-1 leading-relaxed font-bold">{m.ambiguity_hitl.corrected_text || '-'}</p></div>
+                                                                            }
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="p-4 font-bold">{m.우선순위||'-'}</td>
+                                                    </tr>);
+                                                })}
+                                            </tbody>
+                                        </table>);
+                                    })()}
+
+                                    {!isAnalyzing && !errorMessage && mode === 'pm' && activeTab === 'PM 결과' && (optimizedReqs.length > 0) && (() => {
+                                        return (
+                                        <table className="w-full text-left text-xs border-collapse min-w-[1300px] bg-white text-primary">
+                                            <thead className="sticky top-0 bg-pagebg text-[11px] uppercase tracking-widest text-sub border-b border-borderline z-10 font-bold">
+                                                <tr>
+                                                    <th className="p-4 border-r border-borderline">원본ID</th>
+                                                    <th className="p-4 border-r border-borderline">업무시스템</th>
+                                                    <th className="p-4 border-r border-borderline">업무구분</th>
+                                                    <th className="p-4 border-r border-borderline">구분(기능/비기능)</th>
+                                                    <th className="p-4 border-r border-borderline">요구정의명</th>
+                                                    <th className="p-4 border-r border-borderline">상세내용</th>
+                                                    <th className="p-4 border-r border-borderline">연관요구사항/HITL</th>
+                                                    <th className="p-4">우선순위</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-borderline">
+                                                {optimizedReqs.map((m, i) => {
+                                                    const relIds = m.원본_ids || m.related_reqs?.map(r => r.target_id).join(', ') || '';
+                                                    return (
+                                                    <tr key={i} className="hover:bg-pagebg cursor-pointer group transition-colors" onClick={() => setSelectedItem({type:'opt',data:m})}>
+                                                        <td className="p-4 font-mono font-bold text-accent border-r border-borderline text-[11px]">{relIds || '-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m.업무시스템||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m.업무구분||'-'}</td>
+                                                        <td className="p-4 text-sub border-r border-borderline">{m.구분||'-'}</td>
                                                         <td className="p-4 font-bold text-primary border-r border-borderline min-w-[160px]">{m.요구정의명||'-'}</td>
                                                         <td className="p-4 text-sub leading-relaxed border-r border-borderline min-w-[260px]">{m.고객_요구사항_상세_내용||'-'}</td>
                                                         <td className="p-4 border-r border-borderline min-w-[160px]">
@@ -1408,7 +1628,7 @@ STEP 3. 최종 판단 기준:
                                 </>
                             )}
                         </div>
-                        <div className="p-4 bg-pagebg border-t border-borderline text-center rounded-b-lg"><p className="text-[10px] font-bold text-sub tracking-widest uppercase">UIUX 요구사항 선별 에이전트 Pipeline Framework v1.0</p></div>
+                        <div className="p-4 bg-pagebg border-t border-borderline text-center rounded-b-lg"><p className="text-[10px] font-bold text-sub tracking-widest uppercase">{mode === 'pm' ? 'PM 요구사항 추출 에이전트' : 'UIUX 요구사항 선별 에이전트'} Pipeline Framework v1.0</p></div>
                     </div>
                 </div>
             )}
@@ -1429,13 +1649,67 @@ STEP 3. 최종 판단 기준:
                                 </div>
                             </div>
                             <div className="flex gap-0 relative z-20">
-                                {['UIUX 선별', '충돌', '파이프라인'].map(tab => (
+                                {tabList.map(tab => (
                                     <button key={tab} onClick={() => setActiveTab(tab)} className={`tab-btn px-8 py-3 rounded-t text-sm font-bold transition-all ${activeTab === tab ? (tab === '충돌' ? 'tab-conflict-active' : 'tab-active') : 'tab-inactive'}`}>{tab}</button>
                                 ))}
                             </div>
                         </div>
                         <div className="flex-1 overflow-auto p-6 bg-pagebg z-10">
-                            {activeTab === 'UIUX 선별' ? (() => {
+                            {activeTab === resultTabKey && mode === 'pm' ? (() => {
+                                return (
+                                <table className="w-full text-left text-[11px] border-collapse min-w-[1300px] shadow-sm rounded border border-borderline bg-white">
+                                    <thead className="bg-pagebg text-sub sticky top-0 z-10 text-[11px] uppercase tracking-widest font-bold">
+                                        <tr>
+                                            <th className="p-4 border-r border-borderline">원본ID</th>
+                                            <th className="p-4 border-r border-borderline">업무시스템</th>
+                                            <th className="p-4 border-r border-borderline">업무구분</th>
+                                            <th className="p-4 border-r border-borderline">구분(기능/비기능)</th>
+                                            <th className="p-4 border-r border-borderline min-w-[160px]">요구정의명</th>
+                                            <th className="p-4 border-r border-borderline min-w-[260px]">상세내용</th>
+                                            <th className="p-4 border-r border-borderline min-w-[160px]">연관요구사항/HITL</th>
+                                            <th className="p-4">우선순위</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-borderline font-normal text-primary">
+                                        {optimizedReqs.map((m, i) => {
+                                            const relIds = m.원본_ids || m.related_reqs?.map(r => r.target_id).join(', ') || '';
+                                            return (
+                                            <tr key={i} className="hover:bg-pagebg cursor-pointer transition-all" onClick={() => setSelectedItem({type:'opt',data:m})}>
+                                                <td className="p-4 font-mono font-bold text-accent border-r border-borderline">{relIds || '-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m.업무시스템||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m.업무구분||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">{m.구분||'-'}</td>
+                                                <td className="p-4 font-bold text-primary border-r border-borderline">{m.요구정의명||'-'}</td>
+                                                <td className="p-4 text-sub leading-relaxed border-r border-borderline">{m.고객_요구사항_상세_내용||'-'}</td>
+                                                <td className="p-4 border-r border-borderline">
+                                                    {renderBadges(m.related_reqs)}
+                                                    {m.ambiguity_hitl && (
+                                                        <div className="relative mt-2 inline-block"
+                                                            onMouseEnter={() => setHoveredAmbiguity(`fs-${i}`)}
+                                                            onMouseLeave={() => setHoveredAmbiguity(null)}>
+                                                            {m.ambiguity_hitl.is_ambiguous
+                                                                ? <div className="inline-flex items-center gap-1 bg-white text-accent px-2 py-1 rounded text-[10px] font-bold border border-accent cursor-help"><AlertTriangle size={10}/> 모호성 HITL</div>
+                                                                : <div className="inline-flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded text-[10px] font-bold border border-green-300 cursor-help"><CheckCircle size={10}/> 보정완료</div>
+                                                            }
+                                                            {hoveredAmbiguity === `fs-${i}` && (
+                                                                <div className="absolute left-0 top-full mt-1 z-50 bg-white border border-borderline rounded-lg shadow-lg p-3 w-72 text-xs">
+                                                                    <div className="mb-2"><span className="text-[10px] font-bold text-sub uppercase">원문</span><p className="text-sub mt-1 leading-relaxed">{m.ambiguity_hitl.original_text || '-'}</p></div>
+                                                                    {m.ambiguity_hitl.is_ambiguous
+                                                                        ? <div><span className="text-[10px] font-bold text-accent uppercase">대안</span>{m.ambiguity_hitl.suggested_options?.map((o,j) => <p key={j} className="text-primary mt-1">· {o}</p>)}</div>
+                                                                        : <div><span className="text-[10px] font-bold text-green-600 uppercase">보정</span><p className="text-green-700 mt-1 leading-relaxed font-bold">{m.ambiguity_hitl.corrected_text || '-'}</p></div>
+                                                                    }
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="p-4 font-bold text-accent">{m.우선순위||'-'}</td>
+                                            </tr>);
+                                        })}
+                                    </tbody>
+                                </table>);
+                            })()
+                            : activeTab === 'UIUX 선별' ? (() => {
                                 return (
                                 <table className="w-full text-left text-[11px] border-collapse min-w-[1400px] shadow-sm rounded border border-borderline bg-white">
                                     <thead className="bg-pagebg text-sub sticky top-0 z-10 text-[11px] uppercase tracking-widest font-bold">
